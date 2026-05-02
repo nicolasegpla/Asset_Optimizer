@@ -17,7 +17,7 @@ It is not just a generic format converter. The goal is to help users convert, co
 
 ## Current Version
 
-- Frontend: `0.4.0`
+- Frontend: `0.5.0`
 - Versioning policy: Semantic Versioning in `0.x` until runtime, contract, and UX are stable enough for `1.0.0`
 
 ## Monorepo Structure
@@ -195,6 +195,7 @@ This project follows Semantic Versioning (`MAJOR.MINOR.PATCH`), but remains in `
 - `0.2.0` → product/UX foundation
 - `0.3.0` → pragmatic batch UX improvements
 - `0.4.0` → frontend quality sprint
+- `0.5.0` → runtime and operational hardening
 - `1.0.0` → first stable public-ready baseline
 
 ## Roadmap
@@ -228,24 +229,15 @@ This project follows Semantic Versioning (`MAJOR.MINOR.PATCH`), but remains in `
 - Batch UX polish
 - Frontend aligned to `0.4.0`
 
+#### v0.5.0
+- Runtime AVIF capability detection and honest fallback behavior
+- `/api/v1/capabilities` endpoint
+- Enriched `/health` and Docker healthchecks
+- Structured runtime logging with request ID and timing
+- Frontend AVIF availability UX aligned to real backend capabilities
+- Operational setup and troubleshooting docs
+
 ### Next
-
-#### v0.5.0 — Runtime and operational hardening
-
-1. AVIF runtime hardening
-- Validate real AVIF support inside Docker/runtime
-- Add honest fallback behavior when unsupported
-- Improve UX communication around AVIF support
-
-2. Logging and minimal observability
-- Better logs
-- Processing timings
-- Easier diagnosis of per-file failures
-
-3. Runtime/dev consistency
-- Review host vs container workflow
-- Avoid dependency/cache/permission drift
-- Document Bun/npm flow more clearly
 
 #### v0.6.0 — Stronger product UX
 
