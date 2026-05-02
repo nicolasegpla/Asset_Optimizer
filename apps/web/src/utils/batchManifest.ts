@@ -39,8 +39,10 @@ export interface ParsedManifest {
   zipBlob: Blob;
 }
 
-async function loadJSZip(): Promise<typeof import('jszip')> {
-  const JSZip = (await import('jszip')).default;
+import { loadJsZip } from './loadJsZip';
+
+async function _loadJSZip(): Promise<typeof import('jszip')> {
+  const JSZip = await loadJsZip();
   return JSZip;
 }
 
@@ -50,7 +52,7 @@ async function loadJSZip(): Promise<typeof import('jszip')> {
  */
 export async function parseManifestFromZip(zipBlob: Blob): Promise<BatchManifest | null> {
   try {
-    const JSZip = await loadJSZip();
+    const JSZip = await _loadJSZip();
     const zip = await JSZip.loadAsync(zipBlob);
     const manifestFile = zip.file("manifest.json");
     if (!manifestFile) {
@@ -81,6 +83,6 @@ export async function parseManifestFromZip(zipBlob: Blob): Promise<BatchManifest
  * Compute total savings percentage from byte totals.
  */
 export function computeSavingsPercent(originalBytes: number, optimizedBytes: number): number {
-  if (originalBytes === 0) return 0;
+  if (originalBytes === 0 || optimizedBytes >= originalBytes) return 0;
   return Math.round(((originalBytes - optimizedBytes) / originalBytes) * 100);
 }

@@ -10,9 +10,10 @@ import { BatchFileList } from './BatchFileList';
 interface BatchResultPanelProps {
   manifest: BatchManifest;
   errorCount: number;
+  downloadedFileName: string | null;
 }
 
-export function BatchResultPanel({ manifest, errorCount }: BatchResultPanelProps) {
+export function BatchResultPanel({ manifest, errorCount, downloadedFileName }: BatchResultPanelProps) {
   const { summary, files, errors } = manifest;
   const savingsPct = computeSavingsPercent(summary.totalOriginalBytes, summary.totalOptimizedBytes);
 
@@ -24,6 +25,12 @@ export function BatchResultPanel({ manifest, errorCount }: BatchResultPanelProps
   return (
     <div className="batch-result-panel">
       <h3>{headerText}</h3>
+
+      {downloadedFileName && (
+        <p className="batch-download-confirmation">
+          Downloaded: <strong>{downloadedFileName}</strong>
+        </p>
+      )}
 
       <p className="batch-savings-summary">
         Original: {formatBytes(summary.totalOriginalBytes)} → Optimized: {formatBytes(summary.totalOptimizedBytes)}

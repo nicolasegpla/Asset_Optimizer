@@ -5,6 +5,8 @@
  * Silently falls back to frontend defaults when the API is unreachable.
  */
 import { useEffect, useState } from 'react';
+import { DEFAULT_LIMITS } from '../constants/limits';
+import type { Limits } from '../constants/limits';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000';
 
@@ -12,19 +14,6 @@ export interface BackendStatus {
   apiStatus: 'checking' | 'online' | 'offline';
   limits: Limits;
 }
-
-export interface Limits {
-  max_files: number;
-  max_total_bytes: number;
-  max_pixels: number;
-}
-
-// Frontend silent-fallback defaults — must stay in sync with backend hard limits
-export const DEFAULT_LIMITS: Limits = {
-  max_files: 100,
-  max_total_bytes: 50 * 1024 * 1024, // 50 MB
-  max_pixels: 50 * 1024 * 1024, // 50 MP
-};
 
 export function useBackendStatus() {
   const [status, setStatus] = useState<BackendStatus>({

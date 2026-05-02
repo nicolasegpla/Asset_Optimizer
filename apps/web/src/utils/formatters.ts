@@ -13,6 +13,7 @@ export function formatBytesMB(bytes: number | null): string {
     maximumFractionDigits: 2,
     style: 'unit',
     unit: 'megabyte',
+    unitDisplay: 'long',
   }).format(bytes / 1024 / 1024);
 }
 

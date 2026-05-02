@@ -12,8 +12,9 @@ import { useState } from 'react';
 import type { OutputFormat } from '../App';
 import { buildPathsPayload } from '../upload-paths';
 import type { ImageComparisonPreview, ProcessingState } from '../App';
-import { extractApiError } from '../App';
+import { extractApiError } from '../utils/apiErrors';
 import { parseManifestFromZip } from '../utils/batchManifest';
+import { loadJsZip } from '../utils/loadJsZip';
 
 export interface ImageProcessingState {
   isProcessing: boolean;

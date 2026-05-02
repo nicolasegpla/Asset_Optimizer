@@ -101,7 +101,11 @@ export function ResultPanel({
           )}
         </div>
       ) : result.manifest ? (
-        <BatchResultPanel manifest={result.manifest} errorCount={result.errorCount ?? 0} />
+        <BatchResultPanel
+          manifest={result.manifest}
+          errorCount={result.errorCount ?? 0}
+          downloadedFileName={result.downloadedFileName}
+        />
       ) : (
         <div className="result-summary">
           <p>

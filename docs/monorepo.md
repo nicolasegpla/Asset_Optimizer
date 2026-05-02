@@ -165,6 +165,16 @@ Returns backend-enforced limits so the frontend can show them before processing.
 
 Returns API health status.
 
+## Frontend Testing
+
+```bash
+npm run test          # run all tests once
+npm run test:watch    # run tests in watch mode
+```
+
+Tests use Vitest + React Testing Library with jsdom environment.
+Test files live in `src/__tests__/` organized by domain (utils, hooks).
+
 ## Frontend UX Notes
 
 - Presets currently available:
