@@ -122,6 +122,33 @@ select {
     color: inherit;
 }
 
+select,
+option {
+    background-color: #020617;
+    color: #eff6ff;
+}
+
+@supports (-moz-appearance: none) {
+    .card {
+        backdrop-filter: none;
+        background: rgba(15, 23, 42, 0.96);
+    }
+
+    select {
+        color-scheme: light;
+        -moz-appearance: menulist;
+        appearance: menulist;
+        background-color: #020617;
+        color: #eff6ff;
+    }
+
+    option {
+        color-scheme: light;
+        background-color: #020617;
+        color: #eff6ff;
+    }
+}
+
 .picker {
     display: grid;
     gap: 10px;

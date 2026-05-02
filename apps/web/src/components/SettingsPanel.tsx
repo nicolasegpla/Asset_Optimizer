@@ -1,7 +1,12 @@
-import { useEffect } from 'react';
 import type { OutputFormat } from '../App';
 import { PRESET_CATALOG, PRESET_IDS, applyPreset, matchPresetOrCustom } from '../hooks/usePresets';
 import type { PresetId } from '../hooks/usePresets';
+
+const MAX_DIMENSION_DIGITS = 6;
+
+function sanitizeDimensionInput(value: string): string {
+  return value.replace(/\D/g, '').slice(0, MAX_DIMENSION_DIGITS);
+}
 
 interface SettingsPanelProps {
   outputFormat: OutputFormat;
@@ -95,20 +100,26 @@ export function SettingsPanel({
         <label>
           <span>Max width</span>
           <input
+            inputMode="numeric"
+            maxLength={MAX_DIMENSION_DIGITS}
+            pattern="[0-9]*"
             placeholder="1200"
-            type="number"
+            type="text"
             value={maxWidth}
-            onChange={(event) => onMaxWidthChange(event.target.value)}
+            onChange={(event) => onMaxWidthChange(sanitizeDimensionInput(event.target.value))}
           />
         </label>
 
         <label>
           <span>Max height</span>
           <input
+            inputMode="numeric"
+            maxLength={MAX_DIMENSION_DIGITS}
+            pattern="[0-9]*"
             placeholder="1200"
-            type="number"
+            type="text"
             value={maxHeight}
-            onChange={(event) => onMaxHeightChange(event.target.value)}
+            onChange={(event) => onMaxHeightChange(sanitizeDimensionInput(event.target.value))}
           />
         </label>
       </div>
