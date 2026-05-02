@@ -11,8 +11,9 @@ from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 
-from app.schemas import ErrorCode, ErrorDetail, ErrorPayload
+from app.schemas import ErrorCode, ErrorDetail, ErrorPayload, LimitsResponse
 from app.services.archive import ArchivedFile, zip_transformed_assets
+from app.services.upload_paths import resolve_upload_paths
 from app.services.transform import (
     OutputFormat,
     SUPPORTED_INPUT_FORMATS,
@@ -227,6 +228,15 @@ async def list_formats() -> dict[str, list[str]]:
     }
 
 
+@app.get("/api/v1/limits")
+async def get_limits() -> LimitsResponse:
+    return LimitsResponse(
+        max_files=MAX_FILES,
+        max_total_bytes=MAX_TOTAL_BYTES,
+        max_pixels=MAX_PIXELS,
+    )
+
+
 @app.post("/api/v1/transform")
 async def transform_assets(
     files: list[UploadFile] = File(...),
@@ -234,6 +244,7 @@ async def transform_assets(
     quality: int = Form(...),
     max_width: int | None = Form(default=None),
     max_height: int | None = Form(default=None),
+    paths: str | None = Form(default=None),
 ) -> Response:
     """
     Transform one or more images: resize, convert format, compress.
@@ -277,13 +288,18 @@ async def transform_assets(
         _validate_single_file(f, data)
         file_data_pairs.append((f, data))
 
+    # ── Resolve folder-structure paths (optional) ─────────────────────────────
+    resolved_paths: list[str] | None = None
+    if paths is not None:
+        resolved_paths = resolve_upload_paths(files, paths)
+
     # ── Process files ────────────────────────────────────────────────────────
     start_time = time.monotonic()
     processed: list[ProcessedFile] = []
     total_original = 0
     total_optimized = 0
 
-    for file, data in file_data_pairs:
+    for idx, (file, data) in enumerate(file_data_pairs):
         elapsed = time.monotonic() - start_time
         if elapsed > PROCESSING_TIMEOUT_SECONDS:
             _raise_error(
@@ -292,7 +308,12 @@ async def transform_assets(
                 {"timeout_seconds": PROCESSING_TIMEOUT_SECONDS},
             )
 
-        source_relative_path = getattr(file, "webkitRelativePath", "") or file.filename or "unknown"
+        # Use resolved path if provided, otherwise fall back to webkitRelativePath/filename
+        if resolved_paths is not None:
+            source_relative_path = resolved_paths[idx]
+        else:
+            source_relative_path = getattr(file, "webkitRelativePath", "") or file.filename or "unknown"
+
         source_filename = file.filename or "unknown"
         relative_path = _replace_extension(source_relative_path, fmt)
         filename = _replace_extension(source_filename, fmt)

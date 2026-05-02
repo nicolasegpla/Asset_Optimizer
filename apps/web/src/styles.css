@@ -199,6 +199,19 @@ select {
     font-size: 1rem;
 }
 
+.error-hint {
+    margin: 10px 0 0;
+    color: #fee2e2;
+    font-size: 0.95rem;
+}
+
+.error-code {
+    margin: 10px 0 0;
+    color: #fca5a5;
+    font-size: 0.85rem;
+    opacity: 0.9;
+}
+
 .result-card {
     border-color: rgba(134, 239, 172, 0.35);
     background: rgba(22, 101, 52, 0.4);

@@ -1,11 +1,25 @@
 import { useEffect, useRef, useState } from 'react';
 
-const OUTPUT_FORMAT = {
+import packageInfo from '../package.json';
+import { HeroSection } from './components/HeroSection';
+import { SourcePanel } from './components/SourcePanel';
+import { SettingsPanel } from './components/SettingsPanel';
+import { ResultPanel } from './components/ResultPanel';
+import { FileList } from './components/FileList';
+import { useBackendStatus, DEFAULT_LIMITS } from './hooks/useBackendStatus';
+import { useImageProcessing } from './hooks/useImageProcessing';
+import { filterSystemFiles } from './utils/fileFilters';
+
+// ─── Constants ───────────────────────────────────────────────────────────────────
+
+export const OUTPUT_FORMAT = {
     JPG: 'jpg',
     PNG: 'png',
     WEBP: 'webp',
     AVIF: 'avif',
 } as const;
+
+export type OutputFormat = (typeof OUTPUT_FORMAT)[keyof typeof OUTPUT_FORMAT];
 
 const SUPPORTED_INPUT_FORMAT = {
     JPG: 'jpg',
@@ -14,34 +28,37 @@ const SUPPORTED_INPUT_FORMAT = {
     WEBP: 'webp',
 } as const;
 
-type OutputFormat = (typeof OUTPUT_FORMAT)[keyof typeof OUTPUT_FORMAT];
 type SupportedInputFormat = (typeof SUPPORTED_INPUT_FORMAT)[keyof typeof SUPPORTED_INPUT_FORMAT];
 
-interface BackendStatus {
+export const SUPPORTED_INPUT_FORMAT_VALUES = Object.values(SUPPORTED_INPUT_FORMAT) as SupportedInputFormat[];
+
+// ─── Shared types ─────────────────────────────────────────────────────────────────
+
+export interface BackendStatus {
     message: string;
     service: string;
     status: string;
 }
 
-interface SelectedFile {
+export interface SelectedFile {
     name: string;
     relativePath: string;
     sizeInBytes: number;
 }
 
-interface SelectionSummary {
+export interface SelectionSummary {
     invalidFileNames: string[];
     skippedCount: number;
     validCount: number;
 }
 
-interface ImageComparisonPreview {
+export interface ImageComparisonPreview {
     optimizedUrl: string;
     originalName: string;
     originalUrl: string;
 }
 
-interface ProcessingResult {
+export interface ProcessingResult {
     type: 'success';
     compressionRatio: number | null;
     originalBytes: number | null;
@@ -56,10 +73,73 @@ interface ProcessingResult {
     downloadedFileName: string | null;
 }
 
-interface ProcessingError {
+export interface ProcessingError {
     type: 'error';
     code: string;
+    hint: string | null;
     message: string;
+    title: string;
+}
+
+export type ProcessingState = ProcessingResult | ProcessingError | null;
+
+// ─── Error resolution ───────────────────────────────────────────────────────────
+
+const ERROR_COPY = {
+    FILE_COUNT_LIMIT: {
+        hint: 'Try a smaller batch with fewer than 100 files.',
+        title: 'Too many files selected',
+    },
+    INVALID_DIMENSIONS: {
+        hint: 'Use width and height values between 1 and 10000 pixels.',
+        title: 'The resize dimensions are invalid',
+    },
+    INVALID_IMAGE: {
+        hint: 'Make sure the selected files are real, supported images and not corrupted system files.',
+        title: 'We could not process one or more images',
+    },
+    INVALID_PATHS_FORMAT: {
+        hint: 'Try selecting the folder again so we can rebuild its internal structure correctly.',
+        title: 'We could not read the folder structure',
+    },
+    INVALID_QUALITY: {
+        hint: 'Choose a quality value between 1 and 100.',
+        title: 'The quality value is not valid',
+    },
+    NETWORK_ERROR: {
+        hint: 'Check that the API is running and try again.',
+        title: 'We could not reach the server',
+    },
+    PROCESSING_TIMEOUT: {
+        hint: 'Try fewer files, smaller images, or a faster output format.',
+        title: 'The transformation took too long',
+    },
+    TOTAL_SIZE_LIMIT: {
+        hint: 'Reduce the number of files or use smaller images before uploading.',
+        title: 'The upload is too large',
+    },
+    UNSUPPORTED_INPUT_FORMAT: {
+        hint: 'Use JPG, JPEG, PNG, or WEBP files only.',
+        title: 'Some selected files are not supported',
+    },
+    UNSUPPORTED_INPUT_SELECTION: {
+        hint: 'Remove unsupported files and keep only JPG, JPEG, PNG, or WEBP images.',
+        title: 'Your selection contains unsupported files',
+    },
+    UNSUPPORTED_OUTPUT_FORMAT: {
+        hint: 'Pick one of the formats available in the output selector.',
+        title: 'The output format is not available',
+    },
+    UNKNOWN_ERROR: {
+        hint: 'Please try again. If it keeps happening, review the selected files and settings.',
+        title: 'Something went wrong',
+    },
+} as const;
+
+type ErrorCodeKey = keyof typeof ERROR_COPY;
+
+function resolveFriendlyErrorCopy(code: string) {
+    return ERROR_COPY[(code in ERROR_COPY ? code : 'UNKNOWN_ERROR') as ErrorCodeKey];
 }
 
 interface ApiErrorDetail {
@@ -76,13 +156,7 @@ interface ApiErrorResponse {
     error?: ApiErrorDetail;
 }
 
-type ProcessingState = ProcessingResult | ProcessingError | null;
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000';
-const SUPPORTED_INPUT_FORMAT_VALUES = Object.values(SUPPORTED_INPUT_FORMAT) as SupportedInputFormat[];
-const INPUT_ACCEPT = '.jpg,.jpeg,.png,.webp';
-
-function extractApiError(payload: ApiErrorResponse): ProcessingError {
+export function extractApiError(payload: ApiErrorResponse): ProcessingError {
     const nestedError =
         typeof payload.detail === 'object' && payload.detail !== null && !Array.isArray(payload.detail)
             ? payload.detail.error
@@ -90,15 +164,21 @@ function extractApiError(payload: ApiErrorResponse): ProcessingError {
 
     const directError = payload.error;
     const resolvedError = nestedError ?? directError;
+    const code = resolvedError?.code ?? 'UNKNOWN_ERROR';
+    const friendlyCopy = resolveFriendlyErrorCopy(code);
 
     return {
         type: 'error',
-        code: resolvedError?.code ?? 'UNKNOWN_ERROR',
+        code,
+        hint: friendlyCopy.hint,
         message:
             resolvedError?.message ??
             (typeof payload.detail === 'string' ? payload.detail : 'An unknown error occurred.'),
+        title: friendlyCopy.title,
     };
 }
+
+// ─── App ─────────────────────────────────────────────────────────────────────────
 
 function getFileExtension(fileName: string): string {
     const parts = fileName.toLowerCase().split('.');
@@ -109,20 +189,21 @@ function isSupportedInputFile(file: File): boolean {
     return SUPPORTED_INPUT_FORMAT_VALUES.includes(getFileExtension(file.name) as SupportedInputFormat);
 }
 
-function parseNumericHeader(value: string | null): number | null {
-    if (!value) {
-        return null;
-    }
-
-    const parsedValue = Number(value);
-    return Number.isFinite(parsedValue) ? parsedValue : null;
-}
-
 export function App() {
     const filesInputRef = useRef<HTMLInputElement | null>(null);
     const folderInputRef = useRef<HTMLInputElement | null>(null);
 
-    const [backendStatus, setBackendStatus] = useState('checking');
+    const { apiStatus, limits } = useBackendStatus();
+    const {
+        isProcessing,
+        result,
+        imageComparisonPreview,
+        comparisonPosition,
+        setComparisonPosition,
+        handleOptimize,
+        clearResult,
+    } = useImageProcessing();
+
     const [outputFormat, setOutputFormat] = useState<OutputFormat>(OUTPUT_FORMAT.WEBP);
     const [quality, setQuality] = useState(80);
     const [maxWidth, setMaxWidth] = useState('');
@@ -130,29 +211,6 @@ export function App() {
     const [selectedFiles, setSelectedFiles] = useState<SelectedFile[]>([]);
     const [selectedUploadFiles, setSelectedUploadFiles] = useState<File[]>([]);
     const [selectionSummary, setSelectionSummary] = useState<SelectionSummary | null>(null);
-    const [isProcessing, setIsProcessing] = useState(false);
-    const [imageComparisonPreview, setImageComparisonPreview] = useState<ImageComparisonPreview | null>(null);
-    const [comparisonPosition, setComparisonPosition] = useState(50);
-    const [result, setResult] = useState<ProcessingState>(null);
-
-    useEffect(() => {
-        const checkApi = async () => {
-            try {
-                const response = await fetch(`${API_BASE_URL}/health`);
-
-                if (!response.ok) {
-                    throw new Error('API healthcheck failed');
-                }
-
-                const data = (await response.json()) as BackendStatus;
-                setBackendStatus(data.status);
-            } catch {
-                setBackendStatus('offline');
-            }
-        };
-
-        void checkApi();
-    }, []);
 
     useEffect(() => {
         return () => {
@@ -163,85 +221,76 @@ export function App() {
         };
     }, [imageComparisonPreview]);
 
-    const totalSizeLabel = (() => {
-        const totalSize = selectedFiles.reduce((acc, file) => acc + file.sizeInBytes, 0);
-        return new Intl.NumberFormat('en-US', {
-            maximumFractionDigits: 2,
-            style: 'unit',
-            unit: 'megabyte',
-        }).format(totalSize / 1024 / 1024);
-    })();
+    const currentTotalBytes = selectedFiles.reduce((acc, file) => acc + file.sizeInBytes, 0);
 
     const resetFileInputs = () => {
         if (filesInputRef.current) {
             filesInputRef.current.value = '';
         }
-
         if (folderInputRef.current) {
             folderInputRef.current.value = '';
         }
     };
 
-    const clearSelection = () => {
+    const resetSelectionState = () => {
         setSelectedFiles([]);
         setSelectedUploadFiles([]);
         setSelectionSummary(null);
-        setComparisonPosition(50);
-        resetFileInputs();
     };
 
-    const replaceImageComparisonPreview = (nextPreview: ImageComparisonPreview | null) => {
-        setImageComparisonPreview((currentPreview) => {
-            if (currentPreview) {
-                URL.revokeObjectURL(currentPreview.originalUrl);
-                URL.revokeObjectURL(currentPreview.optimizedUrl);
-            }
-
-            return nextPreview;
-        });
+    const clearSelection = () => {
+        resetSelectionState();
+        clearResult();
+        resetFileInputs();
     };
 
     const handleSelection = (files: FileList | null) => {
         if (!files) {
             clearSelection();
-            setResult(null);
             return;
         }
 
-        const uploadFiles = Array.from(files);
-        replaceImageComparisonPreview(null);
+        // 1. Filter junk/system files FIRST (before format validation)
+        const filterResult = filterSystemFiles(files);
+        const junkCount = filterResult.filteredCount;
+
+        // 2. Filter to supported input formats from the accepted files
+        const uploadFiles = Array.from(filterResult.accepted);
         const validFiles = uploadFiles.filter(isSupportedInputFile);
         const invalidFiles = uploadFiles.filter((file) => !isSupportedInputFile(file));
 
+        // Build list of all rejected files for user feedback
+        const allRejectedNames = [
+            ...filterResult.filteredNames,
+            ...invalidFiles.slice(0, 3).map((f) => f.name),
+        ];
+
         if (!validFiles.length) {
             clearSelection();
-            setResult({
-                type: 'error',
-                code: 'UNSUPPORTED_INPUT_SELECTION',
-                message: 'Only JPG, JPEG, PNG, and WEBP files are allowed.',
+            setSelectionSummary({
+                invalidFileNames: allRejectedNames,
+                skippedCount: junkCount + invalidFiles.length,
+                validCount: 0,
             });
+            clearResult();
             return;
         }
 
-        setSelectionSummary({
-            invalidFileNames: invalidFiles.slice(0, 3).map((file) => file.name),
-            skippedCount: invalidFiles.length,
-            validCount: validFiles.length,
-        });
-
-        if (invalidFiles.length) {
-            setResult({
-                type: 'error',
-                code: 'UNSUPPORTED_INPUT_SELECTION',
-                message: `${invalidFiles.length} unsupported file(s) were skipped. Only JPG, JPEG, PNG, and WEBP are allowed.`,
+        // Show skipped file info (system/junk + unsupported)
+        const totalSkipped = junkCount + invalidFiles.length;
+        if (totalSkipped > 0) {
+            setSelectionSummary({
+                invalidFileNames: allRejectedNames,
+                skippedCount: totalSkipped,
+                validCount: validFiles.length,
             });
         } else {
-            setResult(null);
+            setSelectionSummary(null);
         }
 
         const normalizedFiles = validFiles.map((file) => ({
             name: file.name,
-            relativePath: file.webkitRelativePath || file.name,
+            relativePath: (file as File & { webkitRelativePath?: string }).webkitRelativePath || file.name,
             sizeInBytes: file.size,
         }));
 
@@ -249,388 +298,58 @@ export function App() {
         setSelectedUploadFiles(validFiles);
     };
 
-    const handleOptimize = async () => {
-        if (!selectedUploadFiles.length) return;
-
-        setIsProcessing(true);
-        setResult(null);
-
-        try {
-            const formData = new FormData();
-
-            for (const file of selectedUploadFiles) {
-                formData.append('files', file);
-            }
-            formData.append('output_format', outputFormat);
-            formData.append('quality', String(quality));
-            if (maxWidth) formData.append('max_width', maxWidth);
-            if (maxHeight) formData.append('max_height', maxHeight);
-
-            const response = await fetch(`${API_BASE_URL}/api/v1/transform`, {
-                method: 'POST',
-                body: formData,
-            });
-
-            if (!response.ok) {
-                const errorPayload = (await response.json()) as ApiErrorResponse;
-                setResult(extractApiError(errorPayload));
-                setIsProcessing(false);
-                return;
-            }
-
-            // Determine if ZIP or single file from Content-Type
-            const contentType = response.headers.get('Content-Type') ?? '';
-            const isZip = contentType.includes('zip');
-
-            const originalBytes = response.headers.get('X-Asset-Original-Bytes');
-            const optimizedBytes = response.headers.get('X-Asset-Optimized-Bytes');
-            const compressionRatio = response.headers.get('X-Asset-Compression-Ratio');
-            const processedCount = response.headers.get('X-Asset-Processed-Count');
-            const originalFormat = response.headers.get('X-Asset-Original-Format');
-            const outputFormatHeader = response.headers.get('X-Asset-Output-Format');
-            const originalWidth = parseNumericHeader(response.headers.get('X-Asset-Original-Width'));
-            const originalHeight = parseNumericHeader(response.headers.get('X-Asset-Original-Height'));
-            const outputWidth = parseNumericHeader(response.headers.get('X-Asset-Output-Width'));
-            const outputHeight = parseNumericHeader(response.headers.get('X-Asset-Output-Height'));
-
-            if (isZip) {
-                const blob = await response.blob();
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = 'optimized-assets.zip';
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                URL.revokeObjectURL(url);
-
-                setResult({
-                    type: 'success',
-                    compressionRatio: null,
-                    originalBytes: originalBytes ? Number(originalBytes) : null,
-                    originalFormat: null,
-                    originalHeight: null,
-                    originalWidth: null,
-                    optimizedBytes: optimizedBytes ? Number(optimizedBytes) : null,
-                    outputFormat: null,
-                    outputHeight: null,
-                    outputWidth: null,
-                    processedCount: processedCount ? Number(processedCount) : null,
-                    downloadedFileName: 'optimized-assets.zip',
-                });
-                clearSelection();
-            } else {
-                // Single file — extract filename from Content-Disposition
-                const disposition = response.headers.get('Content-Disposition') ?? '';
-                const filenameMatch = disposition.match(/filename="?([^";]+)"?/);
-                const downloadedFileName = filenameMatch ? filenameMatch[1] : 'asset';
-                const originalFile = selectedUploadFiles[0];
-
-                const blob = await response.blob();
-                const url = URL.createObjectURL(blob);
-                const originalUrl = URL.createObjectURL(originalFile);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = downloadedFileName;
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-
-                setResult({
-                    type: 'success',
-                    compressionRatio: compressionRatio ? parseFloat(compressionRatio) : null,
-                    originalBytes: originalBytes ? Number(originalBytes) : null,
-                    originalFormat,
-                    originalHeight,
-                    originalWidth,
-                    optimizedBytes: optimizedBytes ? Number(optimizedBytes) : null,
-                    outputFormat: outputFormatHeader,
-                    outputHeight,
-                    outputWidth,
-                    processedCount: 1,
-                    downloadedFileName,
-                });
-                replaceImageComparisonPreview({
-                    optimizedUrl: url,
-                    originalName: originalFile.name,
-                    originalUrl,
-                });
-                clearSelection();
-            }
-        } catch (err) {
-            setResult({
-                type: 'error',
-                code: 'NETWORK_ERROR',
-                message: err instanceof Error ? err.message : 'Network error occurred.',
-            });
-        } finally {
-            setIsProcessing(false);
-        }
-    };
-
-    const formatBytes = (bytes: number | null): string => {
-        if (bytes === null) return '—';
-        return new Intl.NumberFormat('en-US', { maximumFractionDigits: 1 }).format(bytes / 1024) + ' KB';
-    };
-
-    const formatDimensions = (width: number | null, height: number | null): string => {
-        if (width === null || height === null) {
-            return '—';
-        }
-
-        return `${width}×${height}`;
-    };
-
     return (
         <main className="page">
-            <section className="hero">
-                <p className="eyebrow">Asset Optimizer</p>
-                <h1>Prepare web-ready images without friction.</h1>
-                <p className="description">
-                    Convert, compress, resize, and package image assets for websites, e-commerce,
-                    and digital products.
-                </p>
-
-                <div className="status-row">
-                    <span className={`badge badge-${backendStatus}`}>API: {backendStatus}</span>
-                    <span className="badge badge-neutral">Docker-ready monorepo</span>
-                </div>
-            </section>
+            <HeroSection backendStatus={apiStatus} />
 
             <section className="card grid">
-                <div className="column">
-                    <h2>Source assets</h2>
+                <SourcePanel
+                    filesInputRef={filesInputRef}
+                    folderInputRef={folderInputRef}
+                    selectedFiles={selectedFiles}
+                    selectionSummary={selectionSummary}
+                    onSelection={handleSelection}
+                    limits={limits}
+                    currentTotalBytes={currentTotalBytes}
+                />
 
-                    <label className="picker">
-                        <span>Select files</span>
-                        <input
-                            ref={filesInputRef}
-                            accept={INPUT_ACCEPT}
-                            multiple
-                            type="file"
-                            onChange={(event) => handleSelection(event.target.files)}
-                        />
-                        <small className="format-hint">Supported input formats: JPG, JPEG, PNG, WEBP.</small>
-                    </label>
+                <SettingsPanel
+                    outputFormat={outputFormat}
+                    quality={quality}
+                    maxWidth={maxWidth}
+                    maxHeight={maxHeight}
+                    selectedCount={selectedUploadFiles.length}
+                    isProcessing={isProcessing}
+                    onOutputFormatChange={setOutputFormat}
+                    onQualityChange={setQuality}
+                    onMaxWidthChange={setMaxWidth}
+                    onMaxHeightChange={setMaxHeight}
+                    onOptimize={async () => {
+                        const wasSuccessful = await handleOptimize({
+                            files: selectedUploadFiles,
+                            outputFormat,
+                            quality,
+                            maxWidth,
+                            maxHeight,
+                        });
 
-                    <label className="picker">
-                        <span>Select folder</span>
-                        <input
-                            ref={folderInputRef}
-                            accept={INPUT_ACCEPT}
-                            multiple
-                            type="file"
-                            webkitdirectory=""
-                            directory=""
-                            onChange={(event) => handleSelection(event.target.files)}
-                        />
-                        <small className="format-hint">
-                            Folder uploads can include only JPG, JPEG, PNG, and WEBP files.
-                        </small>
-                    </label>
-
-                    <div className="summary-box">
-                        <strong>{selectedFiles.length}</strong>
-                        <span>files selected</span>
-                        <span>{totalSizeLabel} total</span>
-                        {selectionSummary && (
-                            <>
-                                <span>{selectionSummary.validCount} valid file(s) ready</span>
-                                {selectionSummary.skippedCount > 0 && (
-                                    <div className="selection-warning">
-                                        <span>{selectionSummary.skippedCount} unsupported file(s) skipped</span>
-                                        <span>
-                                            Skipped: {selectionSummary.invalidFileNames.join(', ')}
-                                            {selectionSummary.skippedCount > selectionSummary.invalidFileNames.length
-                                                ? ', ...'
-                                                : ''}
-                                        </span>
-                                    </div>
-                                )}
-                            </>
-                        )}
-                    </div>
-                </div>
-
-                <div className="column">
-                    <h2>Transformation settings</h2>
-
-                    <label>
-                        <span>Output format</span>
-                        <select
-                            value={outputFormat}
-                            onChange={(event) => setOutputFormat(event.target.value as OutputFormat)}
-                        >
-                            {Object.values(OUTPUT_FORMAT).map((format) => (
-                                <option key={format} value={format}>
-                                    {format.toUpperCase()}
-                                </option>
-                            ))}
-                        </select>
-                        {outputFormat === 'avif' && (
-                            <small className="format-hint">AVIF encoding takes longer for large images.</small>
-                        )}
-                    </label>
-
-                    <label>
-                        <span>Quality</span>
-                        <input
-                            max={100}
-                            min={1}
-                            type="range"
-                            value={quality}
-                            onChange={(event) => setQuality(Number(event.target.value))}
-                        />
-                        <small>{quality}%</small>
-                    </label>
-
-                    <div className="dimension-grid">
-                        <label>
-                            <span>Max width</span>
-                            <input
-                                placeholder="1200"
-                                type="number"
-                                value={maxWidth}
-                                onChange={(event) => setMaxWidth(event.target.value)}
-                            />
-                        </label>
-
-                        <label>
-                            <span>Max height</span>
-                            <input
-                                placeholder="1200"
-                                type="number"
-                                value={maxHeight}
-                                onChange={(event) => setMaxHeight(event.target.value)}
-                            />
-                        </label>
-                    </div>
-
-                    <button
-                        className="primary-button"
-                        type="button"
-                        disabled={!selectedUploadFiles.length || isProcessing}
-                        onClick={handleOptimize}
-                    >
-                        {isProcessing ? 'Processing…' : 'Optimize & Download'}
-                    </button>
-                </div>
+                        if (wasSuccessful) {
+                            resetSelectionState();
+                            resetFileInputs();
+                        }
+                    }}
+                />
             </section>
 
-            {result && result.type === 'error' && (
-                <section className="card error-card">
-                    <h2>Error</h2>
-                    <p className="error-message">
-                        <strong>[{result.code}]</strong> {result.message}
-                    </p>
-                </section>
-            )}
+            <ResultPanel
+                result={result}
+                imageComparisonPreview={imageComparisonPreview}
+                comparisonPosition={comparisonPosition}
+                outputFormat={outputFormat}
+                onComparisonPositionChange={setComparisonPosition}
+            />
 
-            {result && result.type === 'success' && (
-                <section className="card result-card">
-                    <h2>Result</h2>
-                    {result.processedCount === 1 ? (
-                        <div className="result-summary">
-                            <p>
-                                <strong>{result.downloadedFileName}</strong> downloaded successfully.
-                            </p>
-                            <div className="size-comparison">
-                                <span>Original: {formatBytes(result.originalBytes)}</span>
-                                <span>→</span>
-                                <span>Optimized: {formatBytes(result.optimizedBytes)}</span>
-                                <span className="ratio-badge">
-                                    {result.compressionRatio !== null ? `-${result.compressionRatio.toFixed(1)}%` : '—'}
-                                </span>
-                            </div>
-                            {imageComparisonPreview && (
-                                <div className="comparison-panel">
-                                    <div className="comparison-labels">
-                                        <span>Before</span>
-                                        <span>After</span>
-                                    </div>
-
-                                    <div className="comparison-stage">
-                                        <img
-                                            className="comparison-image"
-                                            src={imageComparisonPreview.originalUrl}
-                                            alt={`Original ${imageComparisonPreview.originalName}`}
-                                        />
-                                        <div
-                                            className="comparison-overlay"
-                                            style={{ clipPath: `inset(0 0 0 ${comparisonPosition}%)` }}
-                                        >
-                                            <img
-                                                className="comparison-image comparison-image-overlay"
-                                                src={imageComparisonPreview.optimizedUrl}
-                                                alt={`Optimized ${result.downloadedFileName ?? 'image'}`}
-                                            />
-                                        </div>
-                                        <div
-                                            className="comparison-divider"
-                                            style={{ left: `${comparisonPosition}%` }}
-                                        />
-                                    </div>
-
-                                    <label className="comparison-slider">
-                                        <span>Comparison slider: {comparisonPosition}%</span>
-                                        <input
-                                            min={0}
-                                            max={100}
-                                            step={1}
-                                            type="range"
-                                            value={comparisonPosition}
-                                            onChange={(event) =>
-                                                setComparisonPosition(Number(event.target.value))
-                                            }
-                                        />
-                                    </label>
-
-                                    <div className="comparison-caption">
-                                        <span>
-                                            {imageComparisonPreview.originalName} ·{' '}
-                                            {(result.originalFormat ?? 'unknown').toUpperCase()} ·{' '}
-                                            {formatDimensions(result.originalWidth, result.originalHeight)}
-                                        </span>
-                                        <span>
-                                            {(result.downloadedFileName ?? 'optimized image')} ·{' '}
-                                            {(result.outputFormat ?? outputFormat).toUpperCase()} ·{' '}
-                                            {formatDimensions(result.outputWidth, result.outputHeight)}
-                                        </span>
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-                    ) : (
-                        <div className="result-summary">
-                            <p>
-                                <strong>{result.processedCount} files</strong> packaged into{' '}
-                                <strong>{result.downloadedFileName}</strong>.
-                            </p>
-                            <div className="size-comparison">
-                                <span>Original: {formatBytes(result.originalBytes)}</span>
-                                <span>→</span>
-                                <span>Optimized: {formatBytes(result.optimizedBytes)}</span>
-                            </div>
-                        </div>
-                    )}
-                </section>
-            )}
-
-            <section className="card">
-                <h2>Current batch preview</h2>
-                {selectedFiles.length === 0 ? (
-                    <p className="empty-state">No files selected yet.</p>
-                ) : (
-                    <ul className="file-list">
-                        {selectedFiles.slice(0, 8).map((file) => (
-                            <li key={file.relativePath}>
-                                <span>{file.relativePath}</span>
-                                <strong>{Math.round(file.sizeInBytes / 1024)} KB</strong>
-                            </li>
-                        ))}
-                    </ul>
-                )}
-            </section>
+            <FileList files={selectedFiles} />
         </main>
     );
 }

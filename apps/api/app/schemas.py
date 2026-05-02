@@ -16,6 +16,7 @@ class ErrorCode(str, Enum):
     TOTAL_SIZE_LIMIT = "TOTAL_SIZE_LIMIT"
     IMAGE_TOO_LARGE = "IMAGE_TOO_LARGE"
     PROCESSING_TIMEOUT = "PROCESSING_TIMEOUT"
+    INVALID_PATHS_FORMAT = "INVALID_PATHS_FORMAT"
 
 
 class ErrorDetail(BaseModel):
@@ -26,3 +27,9 @@ class ErrorDetail(BaseModel):
 
 class ErrorPayload(BaseModel):
     error: ErrorDetail
+
+
+class LimitsResponse(BaseModel):
+    max_files: int
+    max_total_bytes: int
+    max_pixels: int
