@@ -1,4 +1,5 @@
 import type { SelectedFile, SelectionSummary } from '../App';
+import { computeBatchWarnings } from '../utils/batchWarnings';
 import { formatBytesMB } from '../utils/formatters';
 
 interface SourcePanelProps {
@@ -28,6 +29,8 @@ export function SourcePanel({
 
   const isOverFileLimit = selectedFiles.length > limits.max_files;
   const isOverSizeLimit = currentTotalBytes > limits.max_total_bytes;
+
+  const cautionWarnings = computeBatchWarnings(selectedFiles.length, currentTotalBytes, limits);
 
   return (
     <div className="column">
@@ -60,6 +63,12 @@ export function SourcePanel({
           Folder uploads can include only JPG, JPEG, PNG, and WEBP files.
         </small>
       </label>
+
+      {cautionWarnings.map((warning) => (
+        <div key={warning.message} className="batch-warning caution-warning">
+          {warning.message}
+        </div>
+      ))}
 
       {(isOverFileLimit || isOverSizeLimit) && (
         <div className="selection-warning limits-warning">

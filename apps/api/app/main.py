@@ -11,7 +11,16 @@ from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 
-from app.schemas import ErrorCode, ErrorDetail, ErrorPayload, LimitsResponse
+from app.schemas import (
+    BatchAllFailPayload,
+    BatchFileError,
+    BatchManifestFile,
+    BatchManifestSummary,
+    ErrorCode,
+    ErrorDetail,
+    ErrorPayload,
+    LimitsResponse,
+)
 from app.services.archive import ArchivedFile, zip_transformed_assets
 from app.services.upload_paths import resolve_upload_paths
 from app.services.transform import (
@@ -60,6 +69,42 @@ def _raise_error(code: ErrorCode, message: str, details: dict[str, Any] | None =
         status_code=422,
         detail=ErrorPayload(error=ErrorDetail(code=code, message=message, details=details)).model_dump(mode="json"),
     )
+
+
+def _try_validate_file(file: UploadFile, data: bytes) -> BatchFileError | None:
+    """
+    Validate a single file's format, dimensions, and content.
+    Returns a BatchFileError if validation fails, or None if it passes.
+    Does NOT raise — caller collects errors instead.
+    """
+    ext = _normalize_extension(file.filename or "")
+    if ext not in SUPPORTED_INPUT_FORMATS:
+        return BatchFileError(
+            source=file.filename or "unknown",
+            code=ErrorCode.UNSUPPORTED_INPUT_FORMAT,
+            message=f"File '{file.filename}' has unsupported format '{ext}'.",
+        )
+
+    import io
+    from PIL import Image
+
+    try:
+        with Image.open(io.BytesIO(data)) as img:
+            width, height = img.size
+            pixels = width * height
+            if pixels > MAX_PIXELS:
+                return BatchFileError(
+                    source=file.filename or "unknown",
+                    code=ErrorCode.IMAGE_TOO_LARGE,
+                    message=f"Image '{file.filename}' exceeds {MAX_PIXELS // 1024**2} MP limit.",
+                )
+    except Exception:
+        return BatchFileError(
+            source=file.filename or "unknown",
+            code=ErrorCode.INVALID_IMAGE,
+            message=f"File '{file.filename}' is corrupt or not a valid image.",
+        )
+    return None
 
 
 async def _read_upload_file(file: UploadFile) -> bytes:
@@ -162,6 +207,7 @@ def _build_zip_response(
     processed_count: int,
     original_bytes: int,
     optimized_bytes: int,
+    error_count: int = 0,
 ) -> Response:
     """Build a batch ZIP download response with summary headers."""
     headers = {
@@ -171,7 +217,56 @@ def _build_zip_response(
         "X-Asset-Original-Bytes": str(original_bytes),
         "X-Asset-Optimized-Bytes": str(optimized_bytes),
     }
+    if error_count > 0:
+        headers["X-Asset-Error-Count"] = str(error_count)
     return Response(content=zip_data, media_type="application/zip", headers=headers)
+
+
+def _build_manifest_payload(
+    processed: list[ProcessedFile],
+    resolved_paths: list[str],
+    batch_errors: list[BatchFileError],
+) -> dict:
+    """Build the manifest.json dict for a batch ZIP."""
+    manifest_files = []
+    for p, resolved_path in zip(processed, resolved_paths):
+        ext = p.filename.rsplit(".", 1)[-1]
+        output_format_val = "jpeg" if ext == "jpeg" else ext
+        manifest_files.append({
+            "source": p.filename,
+            "output": resolved_path,
+            "originalBytes": p.original_bytes,
+            "optimizedBytes": p.optimized_bytes,
+            "compressionRatio": round(p.compression_ratio, 4),
+            "originalFormat": p.original_format,
+            "outputFormat": output_format_val,
+            "originalDimensions": {"width": p.original_width, "height": p.original_height},
+            "outputDimensions": {
+                "width": p.transformed_width or p.original_width,
+                "height": p.transformed_height or p.original_height,
+            },
+        })
+
+    manifest_errors = [
+        {"source": e.source, "code": e.code.value, "message": e.message}
+        for e in batch_errors
+    ]
+
+    total_original = sum(p.original_bytes for p in processed)
+    total_optimized = sum(p.optimized_bytes for p in processed)
+    total_files = len(processed) + len(batch_errors)
+
+    return {
+        "files": manifest_files,
+        "errors": manifest_errors,
+        "summary": {
+            "totalFiles": total_files,
+            "processedFiles": len(manifest_files),
+            "failedFiles": len(manifest_errors),
+            "totalOriginalBytes": total_original,
+            "totalOptimizedBytes": total_optimized,
+        },
+    }
 
 
 # ─── App lifecycle ─────────────────────────────────────────────────────────────
@@ -201,6 +296,7 @@ app.add_middleware(
         'X-Asset-Optimized-Bytes',
         'X-Asset-Compression-Ratio',
         'X-Asset-Processed-Count',
+        'X-Asset-Error-Count',
         'X-Asset-Original-Format',
         'X-Asset-Output-Format',
         'X-Asset-Original-Width',
@@ -281,32 +377,58 @@ async def transform_assets(
     if not files:
         _raise_error(ErrorCode.FILE_COUNT_LIMIT, "No files provided.", {"max_files": MAX_FILES, "received": 0})
 
-    # ── Read all file bytes ──────────────────────────────────────────────────
+    # ── Read all file bytes and validate (per-file, collect errors) ──────────
     file_data_pairs: list[tuple[UploadFile, bytes]] = []
+    batch_errors: list[BatchFileError] = []
+
     for f in files:
         data = await _read_upload_file(f)
-        _validate_single_file(f, data)
-        file_data_pairs.append((f, data))
+        err = _try_validate_file(f, data)
+        if err is not None:
+            batch_errors.append(err)
+        else:
+            file_data_pairs.append((f, data))
+
+    # All files failed validation → 422 with per-file error list (no ZIP)
+    if not file_data_pairs and batch_errors:
+        all_fail_payload = BatchAllFailPayload(
+            error=ErrorDetail(
+                code=ErrorCode.INVALID_IMAGE,
+                message=f"All {len(files)} files failed processing.",
+                details={
+                    "totalFiles": len(files),
+                    "failedFiles": len(batch_errors),
+                    "errors": [e.model_dump() for e in batch_errors],
+                },
+            )
+        )
+        raise HTTPException(status_code=422, detail=all_fail_payload.model_dump(mode="json"))
 
     # ── Resolve folder-structure paths (optional) ─────────────────────────────
     resolved_paths: list[str] | None = None
     if paths is not None:
         resolved_paths = resolve_upload_paths(files, paths)
 
-    # ── Process files ────────────────────────────────────────────────────────
+    # ── Process files (per-file try/except, collect successes and failures) ──
     start_time = time.monotonic()
     processed: list[ProcessedFile] = []
-    total_original = 0
-    total_optimized = 0
+    processed_original = 0
+    processed_optimized = 0
+    transform_errors: list[BatchFileError] = []
 
     for idx, (file, data) in enumerate(file_data_pairs):
         elapsed = time.monotonic() - start_time
         if elapsed > PROCESSING_TIMEOUT_SECONDS:
-            _raise_error(
-                ErrorCode.PROCESSING_TIMEOUT,
-                "Processing timed out. Try fewer or smaller files.",
-                {"timeout_seconds": PROCESSING_TIMEOUT_SECONDS},
-            )
+            # Mark remaining files as timeout errors
+            for remaining_file, _ in file_data_pairs[idx:]:
+                transform_errors.append(
+                    BatchFileError(
+                        source=remaining_file.filename or "unknown",
+                        code=ErrorCode.PROCESSING_TIMEOUT,
+                        message="Processing timed out. Try fewer or smaller files.",
+                    )
+                )
+            break
 
         # Use resolved path if provided, otherwise fall back to webkitRelativePath/filename
         if resolved_paths is not None:
@@ -327,11 +449,14 @@ async def transform_assets(
                 max_height=max_height,
             )
         except Exception as e:
-            _raise_error(
-                ErrorCode.INVALID_IMAGE,
-                f"Failed to transform '{filename}': {e}",
-                {"filename": source_filename},
+            transform_errors.append(
+                BatchFileError(
+                    source=source_filename,
+                    code=ErrorCode.INVALID_IMAGE,
+                    message=f"Failed to transform '{source_filename}': {e}",
+                )
             )
+            continue
 
         processed.append(
             ProcessedFile(
@@ -348,13 +473,33 @@ async def transform_assets(
                 transformed_width=metadata.transformed_width,
             )
         )
-        total_original += metadata.original_bytes
-        total_optimized += metadata.optimized_bytes
+        processed_original += metadata.original_bytes
+        processed_optimized += metadata.optimized_bytes
 
-    # ── Build response ───────────────────────────────────────────────────────
+    # ── Build response ────────────────────────────────────────────────────────
     if len(processed) == 1:
         return _build_single_response(processed[0], fmt)
     else:
+        # Collect all errors (validation + transform)
+        all_errors = batch_errors + transform_errors
+
         archived = [ArchivedFile(relative_path=p.relative_path, data=p.data) for p in processed]
-        zip_data = zip_transformed_assets(archived)
-        return _build_zip_response(zip_data, len(processed), total_original, total_optimized)
+
+        # First resolve final ZIP paths (including collision handling), then build manifest,
+        # then write the ZIP with manifest.json included.
+        _, resolved = zip_transformed_assets(archived)
+
+        manifest_data = _build_manifest_payload(
+            processed,
+            [r.resolved_path for r in resolved],
+            all_errors,
+        )
+
+        zip_bytes, _ = zip_transformed_assets(archived, manifest_entries=manifest_data)
+        return _build_zip_response(
+            zip_bytes,
+            len(processed),
+            processed_original,
+            processed_optimized,
+            error_count=len(all_errors),
+        )

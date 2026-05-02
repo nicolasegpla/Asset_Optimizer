@@ -1,6 +1,7 @@
 import type { ProcessingState, ImageComparisonPreview } from '../App';
 import type { OutputFormat } from '../App';
 import { formatBytes, formatDimensions } from '../utils/formatters';
+import { BatchResultPanel } from './BatchResultPanel';
 
 interface ResultPanelProps {
   result: ProcessingState;
@@ -99,6 +100,8 @@ export function ResultPanel({
             </div>
           )}
         </div>
+      ) : result.manifest ? (
+        <BatchResultPanel manifest={result.manifest} errorCount={result.errorCount ?? 0} />
       ) : (
         <div className="result-summary">
           <p>

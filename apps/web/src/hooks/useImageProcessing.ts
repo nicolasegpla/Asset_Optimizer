@@ -6,12 +6,14 @@
  * - handling single-file vs ZIP download flows
  * - result state management (success/error)
  * - preview URL lifecycle for single-file comparison view
+ * - batch manifest extraction via lazy-loaded JSZip
  */
 import { useState } from 'react';
 import type { OutputFormat } from '../App';
 import { buildPathsPayload } from '../upload-paths';
 import type { ImageComparisonPreview, ProcessingState } from '../App';
 import { extractApiError } from '../App';
+import { parseManifestFromZip } from '../utils/batchManifest';
 
 export interface ImageProcessingState {
   isProcessing: boolean;
@@ -119,6 +121,12 @@ export function useImageProcessing(): UseImageProcessingReturn {
 
       if (isZip) {
         const blob = await response.blob();
+        const errorCountHeader = response.headers.get('X-Asset-Error-Count');
+        const errorCount = errorCountHeader ? Number(errorCountHeader) : null;
+
+        // Extract manifest lazily via JSZip
+        const manifest = await parseManifestFromZip(blob);
+
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
@@ -141,6 +149,8 @@ export function useImageProcessing(): UseImageProcessingReturn {
           outputWidth: null,
           processedCount: processedCount ? Number(processedCount) : null,
           downloadedFileName: 'optimized-assets.zip',
+          manifest,
+          errorCount,
         });
         return true;
       } else {
@@ -172,6 +182,8 @@ export function useImageProcessing(): UseImageProcessingReturn {
           outputWidth,
           processedCount: 1,
           downloadedFileName,
+          manifest: null,
+          errorCount: null,
         });
         replaceImageComparisonPreview({
           optimizedUrl: url,

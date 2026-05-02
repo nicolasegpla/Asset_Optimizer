@@ -71,6 +71,9 @@ export interface ProcessingResult {
     outputWidth: number | null;
     processedCount: number | null;
     downloadedFileName: string | null;
+    // Batch-specific fields (populated for ZIP responses via JSZip manifest extraction)
+    manifest: import('./utils/batchManifest').BatchManifest | null;
+    errorCount: number | null;
 }
 
 export interface ProcessingError {

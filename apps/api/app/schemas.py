@@ -33,3 +33,48 @@ class LimitsResponse(BaseModel):
     max_files: int
     max_total_bytes: int
     max_pixels: int
+
+
+# ─── Batch manifest / partial-success schemas ──────────────────────────────────
+
+
+class BatchManifestFile(BaseModel):
+    source: str
+    output: str
+    originalBytes: int
+    optimizedBytes: int
+    compressionRatio: float
+    originalFormat: str
+    outputFormat: str
+    originalDimensions: dict[str, int]
+    outputDimensions: dict[str, int]
+
+
+class BatchFileError(BaseModel):
+    source: str
+    code: ErrorCode
+    message: str
+
+
+class BatchManifestSummary(BaseModel):
+    totalFiles: int
+    processedFiles: int
+    failedFiles: int
+    totalOriginalBytes: int
+    totalOptimizedBytes: int
+
+
+class BatchManifest(BaseModel):
+    files: list[BatchManifestFile]
+    errors: list[BatchFileError]
+    summary: BatchManifestSummary
+
+
+class BatchAllFailDetails(BaseModel):
+    totalFiles: int
+    failedFiles: int
+    errors: list[BatchFileError]
+
+
+class BatchAllFailPayload(BaseModel):
+    error: ErrorDetail

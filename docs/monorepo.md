@@ -56,7 +56,64 @@ docker compose up --build
 - `X-Asset-Processed-Count: <int>`
 - `X-Asset-Original-Bytes: <int>`
 - `X-Asset-Optimized-Bytes: <int>`
+- `X-Asset-Error-Count: <int>` — present when any file in the batch failed (partial or all-fail)
 - Body: binary ZIP data preserving relative folder paths from `paths` field (or `webkitRelativePath` if omitted)
+- The ZIP always contains `manifest.json` at root when ≥2 files are submitted successfully
+
+**Partial success** (`200`): When some files succeed and others fail, the ZIP contains all successfully processed files plus `manifest.json` with per-file success/error records. The `X-Asset-Error-Count` header reports the number of failures.
+
+**All-fail** (`422`): When every file in the batch fails validation or transformation, the API returns JSON with a top-level `error.details.errors` array listing each failed file and its error code/message. No ZIP is generated.
+
+**Single file response** (`200`):
+- `Content-Type: image/{format}`
+- `Content-Disposition: attachment; filename="{name}.{ext}"`
+- `X-Asset-Original-Bytes: <int>`
+- `X-Asset-Optimized-Bytes: <int>`
+- `X-Asset-Compression-Ratio: <float>`
+- Body: binary image data (no ZIP, no manifest)
+
+### Batch ZIP manifest.json
+
+Every batch ZIP (≥2 successfully processed files) includes a `manifest.json` at the archive root. This file provides per-file processing metadata for programmatic consumption of the ZIP contents.
+
+**Schema:**
+```json
+{
+  "files": [
+    {
+      "source": "original-filename.png",
+      "output": "optimized-filename.webp",
+      "originalBytes": 245000,
+      "optimizedBytes": 48000,
+      "compressionRatio": 0.8039,
+      "originalFormat": "png",
+      "outputFormat": "webp",
+      "originalDimensions": { "width": 1200, "height": 800 },
+      "outputDimensions": { "width": 600, "height": 400 }
+    }
+  ],
+  "errors": [
+    {
+      "source": "corrupt-file.png",
+      "code": "INVALID_IMAGE",
+      "message": "File 'corrupt-file.png' is corrupt or not a valid image."
+    }
+  ],
+  "summary": {
+    "totalFiles": 3,
+    "processedFiles": 2,
+    "failedFiles": 1,
+    "totalOriginalBytes": 500000,
+    "totalOptimizedBytes": 96000
+  }
+}
+```
+
+**Notes:**
+- `output` values reflect collision-resolved filenames (e.g., `image-2.webp`) matching actual ZIP entries
+- `compressionRatio` is a float (0–1), e.g., 0.80 means 80% compression (20% reduction)
+- The manifest is UTF-8 encoded and pretty-printed (2-space indent) for readability
+- Single-file downloads do not include `manifest.json`
 
 **Error response** (`422`):
 ```json
