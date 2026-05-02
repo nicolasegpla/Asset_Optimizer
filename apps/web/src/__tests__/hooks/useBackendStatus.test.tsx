@@ -1,6 +1,7 @@
 /**
  * Tests for useBackendStatus hook.
- * Verifies: online path (returns limits from mocked fetch), offline path (falls back to DEFAULT_LIMITS).
+ * Verifies: online path (returns limits from mocked fetch), offline path (falls back to DEFAULT_LIMITS),
+ * and AVIF availability from /api/v1/capabilities.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act } from 'react';
@@ -35,6 +36,10 @@ describe('useBackendStatus', () => {
       ok: true,
       json: () => Promise.resolve(limitsResponse),
     });
+    (globalThis.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve({ avif_available: true }),
+    });
 
     const { result, unmount } = renderHook(() => useBackendStatus());
 
@@ -48,6 +53,7 @@ describe('useBackendStatus', () => {
 
     expect(result.current.apiStatus).toBe('online');
     expect(result.current.limits).toEqual(limitsResponse);
+    expect(result.current.avifAvailable).toBe(true);
     unmount();
   });
 
@@ -62,6 +68,7 @@ describe('useBackendStatus', () => {
 
     expect(result.current.apiStatus).toBe('offline');
     expect(result.current.limits).toEqual(DEFAULT_LIMITS);
+    expect(result.current.avifAvailable).toBe(true); // optimistic default
     unmount();
   });
 
@@ -74,6 +81,10 @@ describe('useBackendStatus', () => {
     (globalThis.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
       ok: false,
       json: () => Promise.resolve({}),
+    });
+    (globalThis.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve({ avif_available: false }),
     });
 
     const { result, unmount } = renderHook(() => useBackendStatus());
@@ -92,6 +103,97 @@ describe('useBackendStatus', () => {
     const { result, unmount } = renderHook(() => useBackendStatus());
     expect(result.current.apiStatus).toBe('checking');
     expect(result.current.limits).toEqual(DEFAULT_LIMITS);
+    expect(result.current.avifAvailable).toBe(true); // optimistic default
+    unmount();
+  });
+
+  it('avifAvailable=false when capabilities returns avif_available:false', async () => {
+    const limitsResponse = {
+      max_files: 50,
+      max_total_bytes: 25 * 1024 * 1024,
+      max_pixels: 25 * 1024 * 1024,
+    };
+
+    (globalThis.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve({ status: 'ok' }),
+    });
+    (globalThis.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve(limitsResponse),
+    });
+    (globalThis.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve({ avif_available: false }),
+    });
+
+    const { result, unmount } = renderHook(() => useBackendStatus());
+
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 10));
+    });
+
+    expect(result.current.avifAvailable).toBe(false);
+    unmount();
+  });
+
+  it('avifAvailable=true when capabilities returns avif_available:true', async () => {
+    const limitsResponse = {
+      max_files: 50,
+      max_total_bytes: 25 * 1024 * 1024,
+      max_pixels: 25 * 1024 * 1024,
+    };
+
+    (globalThis.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve({ status: 'ok' }),
+    });
+    (globalThis.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve(limitsResponse),
+    });
+    (globalThis.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve({ avif_available: true }),
+    });
+
+    const { result, unmount } = renderHook(() => useBackendStatus());
+
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 10));
+    });
+
+    expect(result.current.avifAvailable).toBe(true);
+    unmount();
+  });
+
+  it('avifAvailable stays true when capabilities endpoint fails (fallback)', async () => {
+    const limitsResponse = {
+      max_files: 50,
+      max_total_bytes: 25 * 1024 * 1024,
+      max_pixels: 25 * 1024 * 1024,
+    };
+
+    (globalThis.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve({ status: 'ok' }),
+    });
+    (globalThis.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve(limitsResponse),
+    });
+    // Capabilities fetch fails — non-fatal
+    (globalThis.fetch as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error('Network failure'));
+
+    const { result, unmount } = renderHook(() => useBackendStatus());
+
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 10));
+    });
+
+    // API should be online (health and limits succeeded), AVIF stays at optimistic default
+    expect(result.current.apiStatus).toBe('online');
+    expect(result.current.avifAvailable).toBe(true);
     unmount();
   });
 });

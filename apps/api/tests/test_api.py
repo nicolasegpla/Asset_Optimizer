@@ -1,8 +1,9 @@
-"""Integration tests for POST /api/v1/transform endpoint."""
+"""Integration tests for API endpoints."""
 from __future__ import annotations
 
 import io
 import json
+import logging
 import zipfile
 
 import pytest
@@ -14,6 +15,106 @@ from app.main import app
 @pytest.fixture
 def client() -> TestClient:
     return TestClient(app)
+
+
+class TestCapabilitiesEndpoint:
+    """Tests for GET /api/v1/capabilities."""
+
+    def test_capabilities_returns_avif_available_and_output_formats(
+        self, client: TestClient
+    ) -> None:
+        response = client.get("/api/v1/capabilities")
+        assert response.status_code == 200
+        data = response.json()
+        assert "output_formats" in data
+        assert "avif_available" in data
+        assert isinstance(data["avif_available"], bool)
+        assert isinstance(data["output_formats"], list)
+        assert "jpg" in data["output_formats"]
+        assert "png" in data["output_formats"]
+        assert "webp" in data["output_formats"]
+
+    def test_avif_in_output_formats_only_when_available(
+        self, client: TestClient
+    ) -> None:
+        response = client.get("/api/v1/capabilities")
+        data = response.json()
+        if data["avif_available"]:
+            assert "avif" in data["output_formats"]
+        else:
+            assert "avif" not in data["output_formats"]
+
+
+class TestHealthEndpoint:
+    """Tests for GET /health."""
+
+    def test_health_returns_status_and_service(self, client: TestClient) -> None:
+        response = client.get("/health")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "online"
+        assert data["service"] == "asset-optimizer-api"
+
+    def test_health_returns_avif_available_and_dependencies(
+        self, client: TestClient
+    ) -> None:
+        response = client.get("/health")
+        data = response.json()
+        assert "avif_available" in data
+        assert "dependencies" in data
+        deps = data["dependencies"]
+        assert "pillow" in deps
+        assert "avif_encoder" in deps
+        assert "version" in deps["pillow"]
+        assert "status" in deps["pillow"]
+        assert "available" in deps["avif_encoder"]
+        assert "status" in deps["avif_encoder"]
+
+    def test_health_avif_matches_capabilities_avif(
+        self, client: TestClient
+    ) -> None:
+        health_response = client.get("/health")
+        caps_response = client.get("/api/v1/capabilities")
+        health_data = health_response.json()
+        caps_data = caps_response.json()
+        assert health_data["avif_available"] == caps_data["avif_available"]
+
+
+class TestAvifTransformGuard:
+    """Tests for AVIF runtime guard on POST /api/v1/transform."""
+
+    def test_avif_rejected_when_unavailable(self, client: TestClient, sample_jpg_bytes: bytes) -> None:
+        """When runtime profile says AVIF unavailable, transform returns 422."""
+        # First check current runtime state
+        caps = client.get("/api/v1/capabilities").json()
+        if caps["avif_available"]:
+            pytest.skip("AVIF is available in this runtime — guard not triggered")
+
+        response = client.post(
+            "/api/v1/transform",
+            files={"files": ("test.jpg", sample_jpg_bytes, "image/jpeg")},
+            data={"output_format": "avif", "quality": "80"},
+        )
+        assert response.status_code == 422
+        data = response.json()
+        assert data["detail"]["error"]["code"] == "AVIF_UNAVAILABLE"
+
+    def test_avif_accepted_when_available(self, client: TestClient, sample_jpg_bytes: bytes) -> None:
+        """When runtime profile says AVIF available, transform accepts AVIF."""
+        caps = client.get("/api/v1/capabilities").json()
+        if not caps["avif_available"]:
+            pytest.skip("AVIF is not available in this runtime")
+
+        response = client.post(
+            "/api/v1/transform",
+            files={"files": ("test.jpg", sample_jpg_bytes, "image/jpeg")},
+            data={"output_format": "avif", "quality": "80"},
+        )
+        # Should succeed (200) or fail for other reasons, but NOT 422 AVIF_UNAVAILABLE
+        assert response.status_code != 422 or (
+            response.status_code == 422
+            and response.json().get("detail", {}).get("error", {}).get("code") != "AVIF_UNAVAILABLE"
+        )
 
 
 class TestFormatsEndpoint:

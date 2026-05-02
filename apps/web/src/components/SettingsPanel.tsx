@@ -15,6 +15,7 @@ interface SettingsPanelProps {
   maxHeight: string;
   selectedCount: number;
   isProcessing: boolean;
+  avifAvailable: boolean;
   onOutputFormatChange: (format: OutputFormat) => void;
   onQualityChange: (quality: number) => void;
   onMaxWidthChange: (width: string) => void;
@@ -29,6 +30,7 @@ export function SettingsPanel({
   maxHeight,
   selectedCount,
   isProcessing,
+  avifAvailable,
   onOutputFormatChange,
   onQualityChange,
   onMaxWidthChange,
@@ -77,7 +79,13 @@ export function SettingsPanel({
           <option value="jpg">JPG</option>
           <option value="png">PNG</option>
           <option value="webp">WEBP</option>
-          <option value="avif">AVIF</option>
+          {avifAvailable ? (
+            <option value="avif">AVIF</option>
+          ) : (
+            <option value="avif" disabled title="AVIF not available in this environment">
+              AVIF (unavailable)
+            </option>
+          )}
         </select>
         {outputFormat === 'avif' && (
           <small className="format-hint">AVIF encoding takes longer for large images.</small>

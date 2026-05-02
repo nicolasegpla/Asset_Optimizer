@@ -101,7 +101,7 @@ export function App() {
     const filesInputRef = useRef<HTMLInputElement | null>(null);
     const folderInputRef = useRef<HTMLInputElement | null>(null);
 
-    const { apiStatus, limits } = useBackendStatus();
+    const { apiStatus, limits, avifAvailable } = useBackendStatus();
     const {
         isProcessing,
         result,
@@ -228,6 +228,7 @@ export function App() {
                     maxHeight={maxHeight}
                     selectedCount={selectedUploadFiles.length}
                     isProcessing={isProcessing}
+                    avifAvailable={avifAvailable}
                     onOutputFormatChange={setOutputFormat}
                     onQualityChange={setQuality}
                     onMaxWidthChange={setMaxWidth}

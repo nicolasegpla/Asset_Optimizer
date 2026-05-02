@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import io
+from unittest.mock import patch
 
 import pytest
 from PIL import Image
@@ -17,6 +18,7 @@ from app.services.transform import (
     resize_image,
     transform_image,
 )
+from app.services.runtime import probe_avif, build_runtime_profile
 
 
 class TestDecodeImage:
@@ -307,3 +309,48 @@ class TestFormatConstants:
         assert OutputFormat.PNG.value == "png"
         assert OutputFormat.WEBP.value == "webp"
         assert OutputFormat.AVIF.value == "avif"
+
+
+class TestProbeAvif:
+    """Unit tests for AVIF encoder detection via real in-memory encode probe."""
+
+    def test_probe_avif_returns_true_when_encoder_works(
+        self,
+        sample_jpg_bytes: bytes,
+    ) -> None:
+        """When pillow-avif-plugin is functional, probe returns True."""
+        result = probe_avif()
+        # If encoder is unavailable at test runtime, skip rather than fail
+        if not result:
+            pytest.skip("AVIF encoder not available in this environment")
+
+    def test_probe_avif_returns_false_on_encode_failure(
+        self,
+        sample_jpg_bytes: bytes,
+    ) -> None:
+        """When encode fails (no encoder), probe returns False."""
+        # Patch Image.save to raise an error simulating missing encoder
+        with patch("PIL.Image.Image.save") as mock_save:
+            mock_save.side_effect = IOError("Encoder not available")
+            result = probe_avif()
+            assert result is False
+
+
+class TestBuildRuntimeProfile:
+    """Unit tests for runtime profile construction and AVIF detection."""
+
+    def test_build_runtime_profile_calls_probe_avif(self) -> None:
+        """Profile is built from probe result and dependency snapshot."""
+        profile = build_runtime_profile()
+        assert isinstance(profile.avif_available, bool)
+        assert isinstance(profile.pillow_version, str)
+        assert isinstance(profile.dependency_status, dict)
+
+    def test_runtime_profile_dataclass_fields(self) -> None:
+        """Profile exposes all required fields."""
+        profile = build_runtime_profile()
+        assert hasattr(profile, "avif_available")
+        assert hasattr(profile, "pillow_version")
+        assert hasattr(profile, "dependency_status")
+        assert "pillow" in profile.dependency_status
+        assert "avif_encoder" in profile.dependency_status

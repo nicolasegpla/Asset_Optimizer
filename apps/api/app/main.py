@@ -1,13 +1,16 @@
 """Asset Optimizer API — FastAPI application."""
 from __future__ import annotations
 
+import io
+import logging
 import time
+import uuid
 from collections.abc import Iterable
+from contextlib import asynccontextmanager
 from dataclasses import dataclass
-import os
 from typing import Any
 
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 
@@ -22,6 +25,7 @@ from app.schemas import (
     LimitsResponse,
 )
 from app.services.archive import ArchivedFile, zip_transformed_assets
+from app.services.runtime import build_runtime_profile, RuntimeProfile
 from app.services.upload_paths import resolve_upload_paths
 from app.services.transform import (
     OutputFormat,
@@ -30,6 +34,9 @@ from app.services.transform import (
     transform_image,
 )
 
+# ─── Logging ───────────────────────────────────────────────────────────────────
+
+logger = logging.getLogger(__name__)
 
 # ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -44,7 +51,7 @@ DEFAULT_CORS_ORIGINS = (
 )
 
 
-# ─── Helpers ────────────────────────────────────────────────────────────────────
+# ─── Helpers ───────────────────────────────────────────────────────────────────
 
 def _normalize_extension(filename: str) -> str:
     suffix = filename.rsplit(".", maxsplit=1)[-1].lower()
@@ -85,7 +92,6 @@ def _try_validate_file(file: UploadFile, data: bytes) -> BatchFileError | None:
             message=f"File '{file.filename}' has unsupported format '{ext}'.",
         )
 
-    import io
     from PIL import Image
 
     try:
@@ -139,7 +145,6 @@ def _validate_single_file(file: UploadFile, data: bytes) -> None:
             {"filename": file.filename, "received_format": ext},
         )
 
-    import io
     from PIL import Image
 
     try:
@@ -271,15 +276,43 @@ def _build_manifest_payload(
 
 # ─── App lifecycle ─────────────────────────────────────────────────────────────
 
-try:
-    from pillow_avif import is_available as avif_available
-    _avif_available = avif_available()
-except ImportError:
-    _avif_available = False
+import os
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Build runtime profile at startup, store in app.state."""
+    profile = build_runtime_profile()
+    app.state.runtime_profile = profile
+    yield
+
 
 # ─── App ──────────────────────────────────────────────────────────────────────
 
-app = FastAPI(title="Asset Optimizer API", version="0.2.0")
+app = FastAPI(title="Asset Optimizer API", version="0.5.0", lifespan=lifespan)
+
+
+@app.middleware("http")
+async def logging_middleware(request: Request, call_next):
+    """Assign request ID, log start/end with timing."""
+    request_id = str(uuid.uuid4())
+    request.state.request_id = request_id
+    start = time.monotonic()
+    logger.info(
+        "request_start: request_id=%s method=%s path=%s",
+        request_id,
+        request.method,
+        request.url.path,
+    )
+    response = await call_next(request)
+    duration_ms = round((time.monotonic() - start) * 1000)
+    logger.info(
+        "request_end: request_id=%s status_code=%s duration_ms=%s",
+        request_id,
+        response.status_code,
+        duration_ms,
+    )
+    return response
+
 
 cors_origins = os.getenv('CORS_ORIGINS')
 allowed_origins = [origin.strip() for origin in cors_origins.split(',')] if cors_origins else list(DEFAULT_CORS_ORIGINS)
@@ -308,11 +341,41 @@ app.add_middleware(
 
 
 @app.get("/health")
-async def healthcheck() -> dict[str, str]:
+async def healthcheck(request: Request) -> dict[str, Any]:
+    profile: RuntimeProfile | None = getattr(request.app.state, "runtime_profile", None)
+    if profile is None:
+        # Fallback for TestClient (lifespan not run) — probe now
+        from app.services.runtime import build_runtime_profile
+        profile = build_runtime_profile()
     return {
-        "message": "Asset Optimizer API is running",
-        "service": "asset-optimizer-api",
         "status": "online",
+        "service": "asset-optimizer-api",
+        "avif_available": profile.avif_available,
+        "dependencies": {
+            "pillow": {
+                "version": profile.pillow_version,
+                "status": "ok",
+            },
+            "avif_encoder": {
+                "available": profile.avif_available,
+                "status": "ok" if profile.avif_available else "unavailable",
+            },
+        },
+    }
+
+
+@app.get("/api/v1/capabilities")
+async def get_capabilities(request: Request) -> dict[str, Any]:
+    profile: RuntimeProfile | None = getattr(request.app.state, "runtime_profile", None)
+    if profile is None:
+        from app.services.runtime import build_runtime_profile
+        profile = build_runtime_profile()
+    output_formats = list(SUPPORTED_OUTPUT_FORMATS)
+    if not profile.avif_available:
+        output_formats = [f for f in output_formats if f != "avif"]
+    return {
+        "output_formats": output_formats,
+        "avif_available": profile.avif_available,
     }
 
 
@@ -335,6 +398,7 @@ async def get_limits() -> LimitsResponse:
 
 @app.post("/api/v1/transform")
 async def transform_assets(
+    request: Request,
     files: list[UploadFile] = File(...),
     output_format: str = Form(...),
     quality: int = Form(...),
@@ -346,6 +410,8 @@ async def transform_assets(
     Transform one or more images: resize, convert format, compress.
     Single file → direct download. Multiple files → ZIP.
     """
+    request_id = getattr(request.state, "request_id", "unknown")
+
     # ── Parse and validate output format ─────────────────────────────────────
     try:
         fmt = OutputFormat(output_format.lower())
@@ -354,6 +420,18 @@ async def transform_assets(
             ErrorCode.UNSUPPORTED_OUTPUT_FORMAT,
             f"Output format '{output_format}' is not supported.",
             {"received": output_format, "supported": list(SUPPORTED_OUTPUT_FORMATS)},
+        )
+
+    # ── AVIF runtime guard ────────────────────────────────────────────────────
+    profile: RuntimeProfile | None = getattr(request.app.state, "runtime_profile", None)
+    if profile is None:
+        from app.services.runtime import build_runtime_profile
+        profile = build_runtime_profile()
+    if fmt == OutputFormat.AVIF and not profile.avif_available:
+        _raise_error(
+            ErrorCode.AVIF_UNAVAILABLE,
+            "AVIF encoding is not available in this runtime environment.",
+            {"avif_available": False},
         )
 
     # ── Validate quality ─────────────────────────────────────────────────────
@@ -440,6 +518,15 @@ async def transform_assets(
         relative_path = _replace_extension(source_relative_path, fmt)
         filename = _replace_extension(source_filename, fmt)
 
+        # Per-file DEBUG start log
+        logger.debug(
+            "transform_start: request_id=%s filename=%s output_format=%s original_bytes=%s",
+            request_id,
+            source_filename,
+            fmt.value,
+            len(data),
+        )
+
         try:
             transformed_data, metadata = transform_image(
                 data=data,
@@ -449,6 +536,14 @@ async def transform_assets(
                 max_height=max_height,
             )
         except Exception as e:
+            # Per-file ERROR log
+            logger.error(
+                "transform_error: request_id=%s filename=%s format=%s error=%s",
+                request_id,
+                source_filename,
+                fmt.value,
+                str(e),
+            )
             transform_errors.append(
                 BatchFileError(
                     source=source_filename,
@@ -457,6 +552,17 @@ async def transform_assets(
                 )
             )
             continue
+
+        # Per-file DEBUG completion log
+        duration_ms = round((time.monotonic() - start_time) * 1000)
+        logger.debug(
+            "transform_end: request_id=%s filename=%s duration_ms=%s optimized_bytes=%s compression_ratio=%.2f",
+            request_id,
+            source_filename,
+            duration_ms,
+            metadata.optimized_bytes,
+            metadata.compression_ratio,
+        )
 
         processed.append(
             ProcessedFile(

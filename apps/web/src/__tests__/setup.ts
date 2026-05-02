@@ -7,6 +7,9 @@
 
 import { afterEach, beforeEach, vi } from 'vitest';
 
+// React 19 test environment flag for act(...)
+(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
 // ─── URL.createObjectURL mock ────────────────────────────────────────────────
 
 const objectUrlStore = new Map<string, Blob>();

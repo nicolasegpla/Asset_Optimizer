@@ -8,6 +8,10 @@
  */
 
 export const ERROR_COPY = {
+  AVIF_UNAVAILABLE: {
+    hint: 'AVIF encoding is not available in this runtime environment.',
+    title: 'AVIF encoding not available',
+  },
   FILE_COUNT_LIMIT: {
     hint: 'Try a smaller batch with fewer than 100 files.',
     title: 'Too many files selected',
@@ -60,6 +64,11 @@ export const ERROR_COPY = {
 
 export type ErrorCodeKey = keyof typeof ERROR_COPY;
 
+function isErrorCodeKey(code: string): code is ErrorCodeKey {
+  return code in ERROR_COPY;
+}
+
 export function resolveFriendlyErrorCopy(code: string): (typeof ERROR_COPY)[ErrorCodeKey] {
-  return ERROR_COPY[code in ERROR_COPY ? code : 'UNKNOWN_ERROR'] as (typeof ERROR_COPY)[ErrorCodeKey];
+  const key: ErrorCodeKey = isErrorCodeKey(code) ? code : 'UNKNOWN_ERROR';
+  return ERROR_COPY[key];
 }
