@@ -5,7 +5,6 @@
     "": {
       "name": "asset-optimizer-web",
       "dependencies": {
-        "@rollup/rollup-linux-x64-gnu": "^4.60.2",
         "jszip": "^3.10.1",
         "react": "^19.0.0",
         "react-dom": "^19.0.0",
