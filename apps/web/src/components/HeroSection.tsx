@@ -9,7 +9,10 @@ const APP_VERSION = packageInfo.version;
 export function HeroSection({ backendStatus }: HeroSectionProps) {
   return (
     <section className="hero">
-      <p className="eyebrow">Asset Optimizer</p>
+      <div className="hero-brand">
+        <img className="hero-logo" src="/logo-app.svg" alt="Asset Optimizer logo" />
+        <p className="eyebrow">Asset Optimizer</p>
+      </div>
       <h1>Prepare web-ready images without friction.</h1>
       <p className="description">
         Convert, compress, resize, and package image assets for websites, e-commerce,

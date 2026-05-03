@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 
-import packageInfo from '../package.json';
+import { CreatorCard } from './components/CreatorCard';
 import { HeroSection } from './components/HeroSection';
 import { SourcePanel } from './components/SourcePanel';
 import { SettingsPanel } from './components/SettingsPanel';
@@ -153,14 +153,15 @@ export function App() {
         resetFileInputs();
     };
 
-    const handleSelection = (files: FileList | null) => {
+    const handleSelection = (files: FileList | File[] | null) => {
         if (!files) {
             clearSelection();
             return;
         }
 
         // 1. Filter junk/system files FIRST (before format validation)
-        const filterResult = filterSystemFiles(files);
+        const fileList = Array.isArray(files) ? files : Array.from(files);
+        const filterResult = filterSystemFiles(fileList);
         const junkCount = filterResult.filteredCount;
 
         // 2. Filter to supported input formats from the accepted files
@@ -262,6 +263,8 @@ export function App() {
             />
 
             <FileList files={selectedFiles} />
+
+            <CreatorCard />
         </main>
     );
 }
