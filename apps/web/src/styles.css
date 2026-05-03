@@ -382,3 +382,192 @@ option {
         grid-template-columns: 1fr;
     }
 }
+
+/* ─── Batch Result Panel ─────────────────────────────────────────────────────── */
+
+.batch-result-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.batch-download-confirmation {
+    margin: 0;
+    color: #d1fae5;
+    font-size: 0.95rem;
+}
+
+.batch-savings-summary {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin: 0;
+    color: #a7f3d0;
+    font-size: 0.95rem;
+}
+
+/* ─── Skipped banner ─────────────────────────────────────────────────────────── */
+
+.skipped-banner {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 14px;
+    border-radius: 12px;
+    background: rgba(120, 53, 15, 0.4);
+    border: 1px solid rgba(251, 191, 36, 0.35);
+    color: #fde68a;
+    font-size: 0.9rem;
+}
+
+.skipped-icon {
+    font-size: 1rem;
+}
+
+/* ─── Tabs ───────────────────────────────────────────────────────────────────── */
+
+.batch-tabs {
+    display: flex;
+    gap: 4px;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+    padding-bottom: 0;
+}
+
+.batch-tab {
+    padding: 8px 16px;
+    border: none;
+    border-bottom: 2px solid transparent;
+    background: transparent;
+    color: #94a3b8;
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: color 0.15s, border-color 0.15s;
+}
+
+.batch-tab:hover {
+    color: #e2e8f0;
+}
+
+.batch-tab:focus-visible {
+    outline: 2px solid #7dd3fc;
+    outline-offset: 2px;
+    border-radius: 4px;
+}
+
+.batch-tab-active {
+    color: #7dd3fc;
+    border-bottom-color: #7dd3fc;
+    font-weight: 700;
+}
+
+/* ─── Batch file list ────────────────────────────────────────────────────────── */
+
+.batch-file-list {
+    overflow-x: auto;
+}
+
+.batch-file-list table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9rem;
+}
+
+.batch-file-list th {
+    text-align: left;
+    padding: 8px 12px;
+    color: #94a3b8;
+    font-weight: 500;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.15);
+}
+
+.batch-file-list td {
+    padding: 10px 12px;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.1);
+    color: #e2e8f0;
+}
+
+.sort-btn {
+    background: none;
+    border: none;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+    padding: 0;
+}
+
+.sort-btn:focus-visible {
+    outline: 2px solid #7dd3fc;
+    outline-offset: 2px;
+    border-radius: 4px;
+}
+
+.batch-row-success {
+    border-left: 3px solid rgba(134, 239, 172, 0.5);
+}
+
+.batch-row-failed {
+    border-left: 3px solid rgba(252, 129, 129, 0.6);
+    background: rgba(127, 29, 29, 0.15);
+}
+
+.batch-cell-na {
+    color: #64748b;
+}
+
+.batch-error-cell {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.batch-error-code {
+    font-size: 0.8rem;
+    color: #fca5a5;
+    font-family: monospace;
+}
+
+.batch-error-msg {
+    font-size: 0.85rem;
+    color: #fecaca;
+}
+
+/* ─── Empty state ────────────────────────────────────────────────────────────── */
+
+.batch-empty-state {
+    padding: 32px;
+    text-align: center;
+    color: #64748b;
+    font-size: 0.95rem;
+}
+
+/* ─── Manifest actions ────────────────────────────────────────────────────────── */
+
+.manifest-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.manifest-action-btn {
+    padding: 8px 14px;
+    border: 1px solid rgba(148, 163, 184, 0.3);
+    border-radius: 10px;
+    background: rgba(15, 23, 42, 0.6);
+    color: #bae6fd;
+    font-size: 0.85rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+}
+
+.manifest-action-btn:hover {
+    background: rgba(30, 41, 59, 0.8);
+    border-color: rgba(148, 163, 184, 0.5);
+}
+
+.manifest-action-btn:focus-visible {
+    outline: 2px solid #7dd3fc;
+    outline-offset: 2px;
+}

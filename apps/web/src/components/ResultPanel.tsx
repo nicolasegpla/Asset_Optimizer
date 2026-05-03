@@ -1,4 +1,4 @@
-import type { ProcessingState, ImageComparisonPreview } from '../App';
+import type { ProcessingState, ImageComparisonPreview, SelectionSummary } from '../App';
 import type { OutputFormat } from '../App';
 import { formatBytes, formatDimensions } from '../utils/formatters';
 import { BatchResultPanel } from './BatchResultPanel';
@@ -9,6 +9,7 @@ interface ResultPanelProps {
   comparisonPosition: number;
   outputFormat: OutputFormat;
   onComparisonPositionChange: (position: number) => void;
+  batchSelectionSummary?: SelectionSummary | null;
 }
 
 export function ResultPanel({
@@ -17,6 +18,7 @@ export function ResultPanel({
   comparisonPosition,
   outputFormat,
   onComparisonPositionChange,
+  batchSelectionSummary,
 }: ResultPanelProps) {
   if (!result) return null;
 
@@ -105,6 +107,7 @@ export function ResultPanel({
           manifest={result.manifest}
           errorCount={result.errorCount ?? 0}
           downloadedFileName={result.downloadedFileName}
+          batchSelectionSummary={result.batchSelectionSummary ?? null}
         />
       ) : (
         <div className="result-summary">

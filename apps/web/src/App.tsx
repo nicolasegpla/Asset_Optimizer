@@ -74,6 +74,7 @@ export interface ProcessingResult {
     // Batch-specific fields (populated for ZIP responses via JSZip manifest extraction)
     manifest: import('./utils/batchManifest').BatchManifest | null;
     errorCount: number | null;
+    batchSelectionSummary: SelectionSummary | null;
 }
 
 export interface ProcessingError {
@@ -240,6 +241,7 @@ export function App() {
                             quality,
                             maxWidth,
                             maxHeight,
+                            selectionSummary: selectionSummary ?? undefined,
                         });
 
                         if (wasSuccessful) {
@@ -256,6 +258,7 @@ export function App() {
                 comparisonPosition={comparisonPosition}
                 outputFormat={outputFormat}
                 onComparisonPositionChange={setComparisonPosition}
+                batchSelectionSummary={selectionSummary}
             />
 
             <FileList files={selectedFiles} />

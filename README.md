@@ -17,7 +17,7 @@ It is not just a generic format converter. The goal is to help users convert, co
 
 ## Current Version
 
-- Frontend: `0.5.0`
+- Frontend: `0.6.0`
 - Versioning policy: Semantic Versioning in `0.x` until runtime, contract, and UX are stable enough for `1.0.0`
 
 ## Monorepo Structure
@@ -155,6 +155,11 @@ Returns API health status.
   - Hero / Banner
   - Thumbnail
   - Open Graph
+- Batch result UX now includes:
+  - All / Success / Failed grouped result views
+  - Richer sorting across name, savings, sizes, format, and dimensions
+  - Separate skipped-file banner for pre-upload exclusions
+  - Manifest download and copy-summary actions
 - Folder uploads filter junk/system files before format validation:
   - `.DS_Store`
   - `Thumbs.db`
@@ -196,6 +201,7 @@ This project follows Semantic Versioning (`MAJOR.MINOR.PATCH`), but remains in `
 - `0.3.0` → pragmatic batch UX improvements
 - `0.4.0` → frontend quality sprint
 - `0.5.0` → runtime and operational hardening
+- `0.6.0` → stronger batch result UX
 - `1.0.0` → first stable public-ready baseline
 
 ## Roadmap
@@ -237,39 +243,41 @@ This project follows Semantic Versioning (`MAJOR.MINOR.PATCH`), but remains in `
 - Frontend AVIF availability UX aligned to real backend capabilities
 - Operational setup and troubleshooting docs
 
+#### v0.6.0
+- Batch result tabs for All / Success / Failed outcomes
+- Richer batch sorting across name, savings, original size, optimized size, format, and dimensions
+- Inline failed-row errors with clearer visual distinction
+- Separate skipped-file banner for pre-upload exclusions
+- Manifest actions for JSON download and copyable batch summary
+
 ### Next
 
-#### v0.6.0 — Stronger product UX
+#### v0.7.0 — Stronger product UX follow-up
 
-4. Better batch UX
-- Better sorting/filtering of results
-- Group by success/error/skipped
-- Clearer actions around manifest information
-
-5. Naming/output controls
+4. Naming/output controls
 - Rename rules
 - Batch naming strategy
 - Better control over final ZIP / output names
 
-6. Format guidance
+5. Format guidance
 - When to use WEBP
 - When to use AVIF
 - When JPG or PNG is a better choice
 - Smarter recommendations by use case
 
-#### v0.7.0 — Release quality
+#### v0.8.0 — Release quality
 
-7. CI basics
+6. CI basics
 - Backend tests
 - Frontend tests
 - Minimum automated checks
 
-8. Deploy/release flow
+7. Deploy/release flow
 - Clear release strategy
 - Version bump policy enforcement
 - Optional stronger tag/release visibility
 
-9. Runtime/onboarding docs
+8. Runtime/onboarding docs
 - Local setup
 - Troubleshooting
 - Dependency/environment guidance

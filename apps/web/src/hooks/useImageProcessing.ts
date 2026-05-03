@@ -36,6 +36,11 @@ export interface OptimizeOptions {
   quality: number;
   maxWidth: string;
   maxHeight: string;
+  selectionSummary?: {
+    invalidFileNames: string[];
+    skippedCount: number;
+    validCount: number;
+  };
 }
 
 function parseNumericHeader(value: string | null): number | null {
@@ -71,6 +76,7 @@ export function useImageProcessing(): UseImageProcessingReturn {
     quality,
     maxWidth,
     maxHeight,
+    selectionSummary,
   }: OptimizeOptions) => {
     if (!files.length) return false;
 
@@ -152,6 +158,7 @@ export function useImageProcessing(): UseImageProcessingReturn {
           downloadedFileName: 'optimized-assets.zip',
           manifest,
           errorCount,
+          batchSelectionSummary: selectionSummary ?? null,
         });
         return true;
       } else {
@@ -185,6 +192,7 @@ export function useImageProcessing(): UseImageProcessingReturn {
           downloadedFileName,
           manifest: null,
           errorCount: null,
+          batchSelectionSummary: null,
         });
         replaceImageComparisonPreview({
           optimizedUrl: url,
