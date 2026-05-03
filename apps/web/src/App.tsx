@@ -6,20 +6,12 @@ import { SourcePanel } from './components/SourcePanel';
 import { SettingsPanel } from './components/SettingsPanel';
 import { ResultPanel } from './components/ResultPanel';
 import { FileList } from './components/FileList';
+import { OUTPUT_FORMAT, type OutputFormat } from './constants/outputFormat';
 import { useBackendStatus } from './hooks/useBackendStatus';
 import { useImageProcessing } from './hooks/useImageProcessing';
 import { filterSystemFiles } from './utils/fileFilters';
 
 // ─── Constants ───────────────────────────────────────────────────────────────────
-
-export const OUTPUT_FORMAT = {
-    JPG: 'jpg',
-    PNG: 'png',
-    WEBP: 'webp',
-    AVIF: 'avif',
-} as const;
-
-export type OutputFormat = (typeof OUTPUT_FORMAT)[keyof typeof OUTPUT_FORMAT];
 
 const SUPPORTED_INPUT_FORMAT = {
     JPG: 'jpg',
@@ -51,6 +43,8 @@ export interface SelectionSummary {
     skippedCount: number;
     validCount: number;
 }
+
+type SelectionSource = 'files' | 'folder' | null;
 
 export interface ImageComparisonPreview {
     optimizedUrl: string;
@@ -117,9 +111,14 @@ export function App() {
     const [quality, setQuality] = useState(80);
     const [maxWidth, setMaxWidth] = useState('');
     const [maxHeight, setMaxHeight] = useState('');
+    const [zipName, setZipName] = useState('');
+    const [outputPrefix, setOutputPrefix] = useState('');
+    const [outputSuffix, setOutputSuffix] = useState('');
+    const [outputStem, setOutputStem] = useState('');
     const [selectedFiles, setSelectedFiles] = useState<SelectedFile[]>([]);
     const [selectedUploadFiles, setSelectedUploadFiles] = useState<File[]>([]);
     const [selectionSummary, setSelectionSummary] = useState<SelectionSummary | null>(null);
+    const [selectionSource, setSelectionSource] = useState<SelectionSource>(null);
 
     useEffect(() => {
         return () => {
@@ -145,6 +144,7 @@ export function App() {
         setSelectedFiles([]);
         setSelectedUploadFiles([]);
         setSelectionSummary(null);
+        setSelectionSource(null);
     };
 
     const clearSelection = () => {
@@ -153,11 +153,13 @@ export function App() {
         resetFileInputs();
     };
 
-    const handleSelection = (files: FileList | File[] | null) => {
+    const handleSelection = (files: FileList | File[] | null, source: Exclude<SelectionSource, null>) => {
         if (!files) {
             clearSelection();
             return;
         }
+
+        setSelectionSource(source);
 
         // 1. Filter junk/system files FIRST (before format validation)
         const fileList = Array.isArray(files) ? files : Array.from(files);
@@ -228,13 +230,23 @@ export function App() {
                     quality={quality}
                     maxWidth={maxWidth}
                     maxHeight={maxHeight}
+                    zipName={zipName}
+                    outputPrefix={outputPrefix}
+                    outputSuffix={outputSuffix}
+                    outputStem={outputStem}
                     selectedCount={selectedUploadFiles.length}
+                    showZipName={selectedUploadFiles.length > 1 || selectionSource === 'folder'}
+                    showOutputStem={selectedUploadFiles.length > 1 || selectionSource === 'folder'}
                     isProcessing={isProcessing}
                     avifAvailable={avifAvailable}
                     onOutputFormatChange={setOutputFormat}
                     onQualityChange={setQuality}
                     onMaxWidthChange={setMaxWidth}
                     onMaxHeightChange={setMaxHeight}
+                    onZipNameChange={setZipName}
+                    onOutputPrefixChange={setOutputPrefix}
+                    onOutputSuffixChange={setOutputSuffix}
+                    onOutputStemChange={setOutputStem}
                     onOptimize={async () => {
                         const wasSuccessful = await handleOptimize({
                             files: selectedUploadFiles,
@@ -242,6 +254,10 @@ export function App() {
                             quality,
                             maxWidth,
                             maxHeight,
+                            zipName: zipName || undefined,
+                            outputPrefix: outputPrefix || undefined,
+                            outputSuffix: outputSuffix || undefined,
+                            outputStem: outputStem || undefined,
                             selectionSummary: selectionSummary ?? undefined,
                         });
 

@@ -358,6 +358,12 @@ option {
     grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.naming-grid {
+    display: grid;
+    gap: 12px;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
 .primary-button {
     border: none;
     border-radius: 14px;
@@ -573,6 +579,105 @@ option {
     margin: 0;
     color: #a7f3d0;
     font-size: 0.95rem;
+}
+
+/* ─── Format Guide Disclosure ────────────────────────────────────────────────── */
+
+.format-guide {
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 10px;
+  margin-top: 6px;
+  overflow: hidden;
+}
+
+.format-guide-summary {
+  padding: 8px 12px;
+  font-size: 0.85rem;
+  color: #7dd3fc;
+  cursor: pointer;
+  user-select: none;
+  list-style: none;
+}
+
+.format-guide-summary::-webkit-details-marker {
+  display: none;
+}
+
+.format-guide-summary::before {
+  content: '▶';
+  display: inline-block;
+  margin-right: 6px;
+  font-size: 0.7rem;
+  transition: transform 0.15s ease;
+}
+
+.format-guide[open] .format-guide-summary::before {
+  transform: rotate(90deg);
+}
+
+.format-guide-body {
+  padding: 10px 12px;
+  border-top: 1px solid rgba(148, 163, 184, 0.15);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.format-guide-best-for {
+  margin: 0;
+  font-size: 0.9rem;
+  color: #e2e8f0;
+}
+
+.format-guide-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.format-guide-browser-support {
+  font-size: 0.85rem;
+  color: #94a3b8;
+}
+
+.format-guide-badge {
+  font-size: 0.78rem;
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+
+.format-guide-badge--supported {
+  background: rgba(22, 101, 52, 0.45);
+  border: 1px solid rgba(134, 239, 172, 0.35);
+  color: #86efac;
+}
+
+.format-guide-badge--unsupported {
+  background: rgba(120, 53, 15, 0.4);
+  border: 1px solid rgba(251, 191, 36, 0.35);
+  color: #fde68a;
+}
+
+.format-guide-cautions {
+  margin: 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.format-guide-cautions li {
+  font-size: 0.85rem;
+  color: #fde68a;
+}
+
+/* ─── Preset Rationale Hint ─────────────────────────────────────────────────── */
+
+.preset-rationale-hint {
+  margin: -8px 0 0;
+  font-size: 0.82rem;
+  color: #94a3b8;
 }
 
 /* ─── Skipped banner ─────────────────────────────────────────────────────────── */

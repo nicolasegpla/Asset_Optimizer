@@ -9,7 +9,7 @@
  * - batch manifest extraction via lazy-loaded JSZip
  */
 import { useState } from 'react';
-import type { OutputFormat } from '../App';
+import type { OutputFormat } from '../constants/outputFormat';
 import { buildPathsPayload } from '../upload-paths';
 import type { ImageComparisonPreview, ProcessingState } from '../App';
 import { extractApiError } from '../utils/apiErrors';
@@ -36,6 +36,10 @@ export interface OptimizeOptions {
   quality: number;
   maxWidth: string;
   maxHeight: string;
+  zipName?: string;
+  outputPrefix?: string;
+  outputSuffix?: string;
+  outputStem?: string;
   selectionSummary?: {
     invalidFileNames: string[];
     skippedCount: number;
@@ -76,6 +80,10 @@ export function useImageProcessing(): UseImageProcessingReturn {
     quality,
     maxWidth,
     maxHeight,
+    zipName,
+    outputPrefix,
+    outputSuffix,
+    outputStem,
     selectionSummary,
   }: OptimizeOptions) => {
     if (!files.length) return false;
@@ -99,6 +107,12 @@ export function useImageProcessing(): UseImageProcessingReturn {
       if (pathsPayload !== null) {
         formData.append('paths', pathsPayload);
       }
+      if (zipName) formData.append('zip_name', zipName);
+      // Prefix/suffix only for single-file downloads
+      if (outputPrefix && files.length === 1) formData.append('output_prefix', outputPrefix);
+      if (outputSuffix && files.length === 1) formData.append('output_suffix', outputSuffix);
+      // output_stem only for batch/folder downloads
+      if (outputStem && files.length > 1) formData.append('output_stem', outputStem);
 
       const response = await fetch(`${API_BASE_URL}/api/v1/transform`, {
         method: 'POST',
@@ -134,10 +148,14 @@ export function useImageProcessing(): UseImageProcessingReturn {
         // Extract manifest lazily via JSZip
         const manifest = await parseManifestFromZip(blob);
 
+        const disposition = response.headers.get('Content-Disposition') ?? '';
+        const filenameMatch = disposition.match(/filename="?([^";]+)"?/);
+        const zipFileName = filenameMatch ? filenameMatch[1] : 'optimized-assets.zip';
+
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = 'optimized-assets.zip';
+        a.download = zipFileName;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
@@ -155,7 +173,7 @@ export function useImageProcessing(): UseImageProcessingReturn {
           outputHeight: null,
           outputWidth: null,
           processedCount: processedCount ? Number(processedCount) : null,
-          downloadedFileName: 'optimized-assets.zip',
+          downloadedFileName: zipFileName,
           manifest,
           errorCount,
           batchSelectionSummary: selectionSummary ?? null,

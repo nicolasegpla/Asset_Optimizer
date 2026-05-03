@@ -33,6 +33,7 @@ from app.services.transform import (
     SUPPORTED_OUTPUT_FORMATS,
     transform_image,
 )
+from app.services.naming import NamingConfig, resolve_single_output_name, resolve_batch_output_name, resolve_zip_name, sanitize_naming_config
 
 # ─── Logging ───────────────────────────────────────────────────────────────────
 
@@ -212,11 +213,12 @@ def _build_zip_response(
     processed_count: int,
     original_bytes: int,
     optimized_bytes: int,
+    zip_filename: str,
     error_count: int = 0,
 ) -> Response:
     """Build a batch ZIP download response with summary headers."""
     headers = {
-        "Content-Disposition": 'attachment; filename="optimized-assets.zip"',
+        "Content-Disposition": f'attachment; filename="{zip_filename}"',
         "Content-Type": "application/zip",
         "X-Asset-Processed-Count": str(processed_count),
         "X-Asset-Original-Bytes": str(original_bytes),
@@ -405,6 +407,10 @@ async def transform_assets(
     max_width: int | None = Form(default=None),
     max_height: int | None = Form(default=None),
     paths: str | None = Form(default=None),
+    zip_name: str | None = Form(default=None),
+    output_prefix: str | None = Form(default=None),
+    output_suffix: str | None = Form(default=None),
+    output_stem: str | None = Form(default=None),
 ) -> Response:
     """
     Transform one or more images: resize, convert format, compress.
@@ -447,6 +453,15 @@ async def transform_assets(
         _raise_error(ErrorCode.INVALID_DIMENSIONS, "max_width must be between 1 and 10000.")
     if max_height is not None and not (1 <= max_height <= 10000):
         _raise_error(ErrorCode.INVALID_DIMENSIONS, "max_height must be between 1 and 10000.")
+
+    # ── Validate naming config ───────────────────────────────────────────────
+    try:
+        naming_config = sanitize_naming_config(zip_name, output_prefix, output_suffix, output_stem)
+    except ValueError as e:
+        _raise_error(
+            ErrorCode.INVALID_NAMING_CONFIG,
+            f"Invalid naming field: {e}",
+        )
 
     # ── Enforce hard limits ──────────────────────────────────────────────────
     total_bytes = _count_bytes(files)
@@ -518,6 +533,11 @@ async def transform_assets(
         relative_path = _replace_extension(source_relative_path, fmt)
         filename = _replace_extension(source_filename, fmt)
 
+        # Apply single-file naming: preserves original basename + prefix/suffix, no numbering.
+        # (batch numbering is applied after the loop once we know the final count)
+        relative_path = resolve_single_output_name(relative_path, naming_config, fmt.value)
+        filename = resolve_single_output_name(filename, naming_config, fmt.value)
+
         # Per-file DEBUG start log
         logger.debug(
             "transform_start: request_id=%s filename=%s output_format=%s original_bytes=%s",
@@ -582,6 +602,18 @@ async def transform_assets(
         processed_original += metadata.original_bytes
         processed_optimized += metadata.optimized_bytes
 
+    # ── Apply batch sequential naming ──────────────────────────────────────────
+    # For batch/folder outputs: replace ALL basenames with {stem}-{N} starting at 1.
+    # For single-file: resolve_single_output_name was already applied in the loop above.
+    if len(processed) > 1:
+        for seq, p in enumerate(processed, start=1):
+            p.relative_path = resolve_batch_output_name(
+                p.relative_path, naming_config, fmt.value, seq
+            )
+            p.filename = resolve_batch_output_name(
+                p.filename, naming_config, fmt.value, seq
+            )
+
     # ── Build response ────────────────────────────────────────────────────────
     if len(processed) == 1:
         return _build_single_response(processed[0], fmt)
@@ -602,10 +634,15 @@ async def transform_assets(
         )
 
         zip_bytes, _ = zip_transformed_assets(archived, manifest_entries=manifest_data)
+
+        # Resolve ZIP filename — sanitize user stem or fall back to default
+        resolved_zip_name = resolve_zip_name(naming_config.zip_name)
+
         return _build_zip_response(
             zip_bytes,
             len(processed),
             processed_original,
             processed_optimized,
+            resolved_zip_name,
             error_count=len(all_errors),
         )

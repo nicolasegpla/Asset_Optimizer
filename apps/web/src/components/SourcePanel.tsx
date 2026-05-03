@@ -9,7 +9,7 @@ interface SourcePanelProps {
   folderInputRef: RefObject<HTMLInputElement | null>;
   selectedFiles: SelectedFile[];
   selectionSummary: SelectionSummary | null;
-  onSelection: (files: FileList | File[] | null) => void;
+  onSelection: (files: FileList | File[] | null, source: 'files' | 'folder') => void;
   limits: { max_files: number; max_total_bytes: number };
   currentTotalBytes: number;
 }
@@ -87,7 +87,7 @@ export function SourcePanel({
       try {
         const directoryHandle = await directoryWindow.showDirectoryPicker();
         const files = await collectDirectoryFiles(directoryHandle);
-        onSelection(files);
+        onSelection(files, 'folder');
         return;
       } catch (error) {
         if (error instanceof DOMException && error.name === 'AbortError') {
@@ -120,7 +120,7 @@ export function SourcePanel({
           className="folder-input-hidden"
           tabIndex={-1}
           aria-hidden="true"
-          onChange={(event) => onSelection(event.target.files)}
+          onChange={(event) => onSelection(event.target.files, 'files')}
         />
         <small className="format-hint">Supported input formats: JPG, JPEG, PNG, WEBP.</small>
       </label>
@@ -144,7 +144,7 @@ export function SourcePanel({
           className="folder-input-hidden"
           tabIndex={-1}
           aria-hidden="true"
-          onChange={(event) => onSelection(event.target.files)}
+          onChange={(event) => onSelection(event.target.files, 'folder')}
         />
         <small className="format-hint">
           Folder uploads can include only JPG, JPEG, PNG, and WEBP files.

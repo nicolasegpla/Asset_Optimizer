@@ -1,6 +1,7 @@
-import type { OutputFormat } from '../App';
+import type { OutputFormat } from '../constants/outputFormat';
 import { PRESET_CATALOG, PRESET_IDS, applyPreset, matchPresetOrCustom } from '../hooks/usePresets';
 import type { PresetId } from '../hooks/usePresets';
+import { FormatGuide } from './FormatGuide';
 
 const MAX_DIMENSION_DIGITS = 6;
 
@@ -13,13 +14,23 @@ interface SettingsPanelProps {
   quality: number;
   maxWidth: string;
   maxHeight: string;
+  zipName: string;
+  outputPrefix: string;
+  outputSuffix: string;
+  outputStem: string;
   selectedCount: number;
+  showZipName: boolean;
+  showOutputStem: boolean;
   isProcessing: boolean;
   avifAvailable: boolean;
   onOutputFormatChange: (format: OutputFormat) => void;
   onQualityChange: (quality: number) => void;
   onMaxWidthChange: (width: string) => void;
   onMaxHeightChange: (height: string) => void;
+  onZipNameChange: (name: string) => void;
+  onOutputPrefixChange: (prefix: string) => void;
+  onOutputSuffixChange: (suffix: string) => void;
+  onOutputStemChange: (stem: string) => void;
   onOptimize: () => void;
 }
 
@@ -28,13 +39,23 @@ export function SettingsPanel({
   quality,
   maxWidth,
   maxHeight,
+  zipName,
+  outputPrefix,
+  outputSuffix,
+  outputStem,
   selectedCount,
+  showZipName,
+  showOutputStem,
   isProcessing,
   avifAvailable,
   onOutputFormatChange,
   onQualityChange,
   onMaxWidthChange,
   onMaxHeightChange,
+  onZipNameChange,
+  onOutputPrefixChange,
+  onOutputSuffixChange,
+  onOutputStemChange,
   onOptimize,
 }: SettingsPanelProps) {
   const activePreset = matchPresetOrCustom(outputFormat, quality, maxWidth, maxHeight);
@@ -68,6 +89,13 @@ export function SettingsPanel({
         </select>
       </label>
 
+      {activePreset !== PRESET_IDS.CUSTOM && (() => {
+        const matched = PRESET_CATALOG.find((p) => p.id === activePreset);
+        return matched?.rationale ? (
+          <small className="preset-rationale-hint">{matched.rationale}</small>
+        ) : null;
+      })()}
+
       <label>
         <span>Output format</span>
         <select
@@ -82,14 +110,12 @@ export function SettingsPanel({
           {avifAvailable ? (
             <option value="avif">AVIF</option>
           ) : (
-            <option value="avif" disabled title="AVIF not available in this environment">
+            <option value="avif" disabled title="AVIF requires a server dependency — currently not installed">
               AVIF (unavailable)
             </option>
           )}
         </select>
-        {outputFormat === 'avif' && (
-          <small className="format-hint">AVIF encoding takes longer for large images.</small>
-        )}
+        <FormatGuide outputFormat={outputFormat} />
       </label>
 
       <label>
@@ -130,6 +156,54 @@ export function SettingsPanel({
             onChange={(event) => onMaxHeightChange(sanitizeDimensionInput(event.target.value))}
           />
         </label>
+      </div>
+
+      <div className="naming-grid">
+        {showZipName && (
+          <label>
+            <span>ZIP name</span>
+            <input
+              type="text"
+              placeholder="optimized-assets"
+              value={zipName}
+              onChange={(event) => onZipNameChange(event.target.value)}
+            />
+          </label>
+        )}
+
+        {showOutputStem ? (
+          <label>
+            <span>Output stem</span>
+            <input
+              type="text"
+              placeholder="e.g. file (results in file-1, file-2...)"
+              value={outputStem}
+              onChange={(event) => onOutputStemChange(event.target.value)}
+            />
+          </label>
+        ) : (
+          <>
+            <label>
+              <span>Output prefix</span>
+              <input
+                type="text"
+                placeholder="e.g. optimized_"
+                value={outputPrefix}
+                onChange={(event) => onOutputPrefixChange(event.target.value)}
+              />
+            </label>
+
+            <label>
+              <span>Output suffix</span>
+              <input
+                type="text"
+                placeholder="e.g. _final"
+                value={outputSuffix}
+                onChange={(event) => onOutputSuffixChange(event.target.value)}
+              />
+            </label>
+          </>
+        )}
       </div>
 
       <button

@@ -208,8 +208,9 @@ class TestTransformBatchFiles:
         zf = zipfile.ZipFile(io.BytesIO(response.content))
         names = zf.namelist()
         assert len(names) == 3
-        assert "a.jpeg" in names
-        assert "b.jpeg" in names
+        # Batch outputs use sequential naming (default stem "file")
+        assert "file-1.jpeg" in names
+        assert "file-2.jpeg" in names
         assert "manifest.json" in names
 
 
@@ -219,7 +220,7 @@ class TestTransformFolderStructure:
     def test_paths_field_preserves_subfolder_in_zip(
         self, client: TestClient, sample_jpg_bytes: bytes, sample_png_bytes: bytes
     ) -> None:
-        """When `paths` is provided, ZIP entries reflect the relative paths."""
+        """When `paths` is provided, directory is preserved but basenames become sequential."""
         response = client.post(
             "/api/v1/transform",
             files=[
@@ -236,8 +237,9 @@ class TestTransformFolderStructure:
         assert response.headers["content-type"] == "application/zip"
         zf = zipfile.ZipFile(io.BytesIO(response.content))
         names = zf.namelist()
-        assert "images/hero.jpeg" in names
-        assert "assets/thumb.jpeg" in names
+        # Directory preserved, basename replaced with sequential naming
+        assert "images/file-1.jpeg" in names
+        assert "assets/file-2.jpeg" in names
 
     def test_missing_paths_field_falls_back_to_flat_zip(
         self, client: TestClient, sample_jpg_bytes: bytes, sample_png_bytes: bytes
@@ -254,8 +256,10 @@ class TestTransformFolderStructure:
         assert response.status_code == 200
         zf = zipfile.ZipFile(io.BytesIO(response.content))
         names = zf.namelist()
-        # Backward compat: webkitRelativePath or filename used as-is, then extension replaced to output format
-        assert "img1.jpeg" in names
+        # Batch sequential naming: original filenames replaced with file-1, file-2
+        assert "file-1.jpeg" in names
+        assert "file-2.jpeg" in names
+        assert len(names) == 3
 
     def test_malformed_paths_json_returns_422(
         self, client: TestClient, sample_jpg_bytes: bytes
@@ -333,7 +337,7 @@ class TestTransformFolderStructure:
     def test_duplicate_basename_files_both_preserved(
         self, client: TestClient, sample_jpg_bytes: bytes, sample_png_bytes: bytes
     ) -> None:
-        """Two files with the same filename in different subfolders — both preserved via ordered paths."""
+        """Two files with same basename in different subfolders — both preserved with sequential naming per directory."""
         response = client.post(
             "/api/v1/transform",
             files=[
@@ -349,8 +353,9 @@ class TestTransformFolderStructure:
         assert response.status_code == 200
         zf = zipfile.ZipFile(io.BytesIO(response.content))
         names = zf.namelist()
-        assert "products/x.jpeg" in names
-        assert "thumbnails/x.jpeg" in names
+        # Directory preserved, basename replaced with sequential numbering
+        assert "products/file-1.jpeg" in names
+        assert "thumbnails/file-2.jpeg" in names
 
 
 class TestTransformValidation:
@@ -607,3 +612,239 @@ class TestBatchManifestAndPartialSuccess:
         )
         assert response.status_code == 422
         # No ZIP → no X-Asset-Error-Count header (only present on 200 batch responses)
+
+
+class TestNamingControls:
+    """Integration tests for naming controls (zip_name, output_stem, output_prefix, output_suffix).
+
+    Single-file: prefix/suffix only, no numbering, original basename preserved.
+    Batch/folder: output_stem + sequential numbering, prefix/suffix ignored.
+    ZIP name: independent field, separate from per-file naming.
+    """
+
+    def test_batch_default_zip_name_is_optimized_assets(
+        self, client: TestClient, sample_jpg_bytes: bytes, sample_png_bytes: bytes
+    ) -> None:
+        """Without zip_name, Content-Disposition uses default optimized-assets.zip."""
+        response = client.post(
+            "/api/v1/transform",
+            files=[
+                ("files", ("a.jpg", sample_jpg_bytes, "image/jpeg")),
+                ("files", ("b.png", sample_png_bytes, "image/png")),
+            ],
+            data={"output_format": "jpg", "quality": "80"},
+        )
+        assert response.status_code == 200
+        disp = response.headers.get("content-disposition", "")
+        assert "optimized-assets.zip" in disp
+
+    def test_batch_custom_zip_name_in_content_disposition(
+        self, client: TestClient, sample_jpg_bytes: bytes, sample_png_bytes: bytes
+    ) -> None:
+        """With zip_name, Content-Disposition carries the custom name."""
+        response = client.post(
+            "/api/v1/transform",
+            files=[
+                ("files", ("a.jpg", sample_jpg_bytes, "image/jpeg")),
+                ("files", ("b.png", sample_png_bytes, "image/png")),
+            ],
+            data={
+                "output_format": "jpg",
+                "quality": "80",
+                "zip_name": "my-custom-archive",
+            },
+        )
+        assert response.status_code == 200
+        disp = response.headers.get("content-disposition", "")
+        assert "my-custom-archive.zip" in disp
+
+    def test_batch_output_stem_produces_sequential_names(
+        self, client: TestClient, sample_jpg_bytes: bytes, sample_png_bytes: bytes
+    ) -> None:
+        """Batch: output_stem replaces basenames with stem-1, stem-2, ..."""
+        response = client.post(
+            "/api/v1/transform",
+            files=[
+                ("files", ("photo.jpg", sample_jpg_bytes, "image/jpeg")),
+                ("files", ("image.png", sample_png_bytes, "image/png")),
+            ],
+            data={
+                "output_format": "webp",
+                "quality": "80",
+                "output_stem": "catalog",
+            },
+        )
+        assert response.status_code == 200
+        zf = zipfile.ZipFile(io.BytesIO(response.content))
+        names = [n for n in zf.namelist() if n != "manifest.json"]
+        assert "catalog-1.webp" in names
+        assert "catalog-2.webp" in names
+        # Original names must NOT appear
+        assert "photo.webp" not in names
+        assert "image.webp" not in names
+
+    def test_batch_default_stem_is_file(
+        self, client: TestClient, sample_jpg_bytes: bytes, sample_png_bytes: bytes
+    ) -> None:
+        """Batch without output_stem: defaults to 'file' stem."""
+        response = client.post(
+            "/api/v1/transform",
+            files=[
+                ("files", ("a.jpg", sample_jpg_bytes, "image/jpeg")),
+                ("files", ("b.png", sample_png_bytes, "image/png")),
+            ],
+            data={
+                "output_format": "webp",
+                "quality": "80",
+            },
+        )
+        assert response.status_code == 200
+        zf = zipfile.ZipFile(io.BytesIO(response.content))
+        names = [n for n in zf.namelist() if n != "manifest.json"]
+        assert "file-1.webp" in names
+        assert "file-2.webp" in names
+
+    def test_batch_prefix_suffix_ignored(
+        self, client: TestClient, sample_jpg_bytes: bytes, sample_png_bytes: bytes
+    ) -> None:
+        """Batch: output_prefix and output_suffix must be ignored; output_stem used instead."""
+        response = client.post(
+            "/api/v1/transform",
+            files=[
+                ("files", ("photo.jpg", sample_jpg_bytes, "image/jpeg")),
+                ("files", ("image.png", sample_png_bytes, "image/png")),
+            ],
+            data={
+                "output_format": "webp",
+                "quality": "80",
+                "output_prefix": "opt_",
+                "output_suffix": "_final",
+                "output_stem": "batch",
+            },
+        )
+        assert response.status_code == 200
+        zf = zipfile.ZipFile(io.BytesIO(response.content))
+        names = [n for n in zf.namelist() if n != "manifest.json"]
+        # prefix/suffix must NOT appear; only stem numbering
+        assert "batch-1.webp" in names
+        assert "batch-2.webp" in names
+        assert "opt_" not in str(names)
+        assert "_final" not in str(names)
+
+    def test_single_file_with_prefix_suffix_content_disposition(
+        self, client: TestClient, sample_jpg_bytes: bytes
+    ) -> None:
+        """Single file: prefix/suffix applied, original basename preserved, no numbering."""
+        response = client.post(
+            "/api/v1/transform",
+            files={"files": ("photo.jpg", sample_jpg_bytes, "image/jpeg")},
+            data={
+                "output_format": "jpg",
+                "quality": "80",
+                "output_prefix": "pre_",
+                "output_suffix": "_suf",
+            },
+        )
+        assert response.status_code == 200
+        disp = response.headers.get("content-disposition", "")
+        assert "pre_photo_suf.jpeg" in disp
+
+    def test_single_file_output_stem_ignored(
+        self, client: TestClient, sample_jpg_bytes: bytes
+    ) -> None:
+        """Single file: output_stem must be ignored; original basename preserved."""
+        response = client.post(
+            "/api/v1/transform",
+            files={"files": ("photo.jpg", sample_jpg_bytes, "image/jpeg")},
+            data={
+                "output_format": "webp",
+                "quality": "80",
+                "output_stem": "catalog",
+            },
+        )
+        assert response.status_code == 200
+        disp = response.headers.get("content-disposition", "")
+        # Original basename preserved, no numbering
+        assert "photo.webp" in disp
+        assert "catalog" not in disp
+
+    def test_single_file_no_numbering(
+        self, client: TestClient, sample_jpg_bytes: bytes
+    ) -> None:
+        """Single file never gets numbered — format conversion only."""
+        response = client.post(
+            "/api/v1/transform",
+            files={"files": ("landscape.jpg", sample_jpg_bytes, "image/jpeg")},
+            data={
+                "output_format": "webp",
+                "quality": "80",
+            },
+        )
+        assert response.status_code == 200
+        disp = response.headers.get("content-disposition", "")
+        assert "landscape.webp" in disp
+        assert "-1" not in disp
+
+    def test_invalid_zip_name_empty_after_sanitize_returns_422(
+        self, client: TestClient, sample_jpg_bytes: bytes, sample_png_bytes: bytes
+    ) -> None:
+        """zip_name that becomes empty after sanitization → 422 INVALID_NAMING_CONFIG."""
+        response = client.post(
+            "/api/v1/transform",
+            files=[
+                ("files", ("a.jpg", sample_jpg_bytes, "image/jpeg")),
+                ("files", ("b.png", sample_png_bytes, "image/png")),
+            ],
+            data={
+                "output_format": "jpg",
+                "quality": "80",
+                "zip_name": "   ..  ",
+            },
+        )
+        assert response.status_code == 422
+        data = response.json()
+        assert data["detail"]["error"]["code"] == "INVALID_NAMING_CONFIG"
+
+    def test_invalid_output_stem_returns_422(
+        self, client: TestClient, sample_jpg_bytes: bytes, sample_png_bytes: bytes
+    ) -> None:
+        """output_stem that becomes empty after sanitization → 422 INVALID_NAMING_CONFIG."""
+        response = client.post(
+            "/api/v1/transform",
+            files=[
+                ("files", ("a.jpg", sample_jpg_bytes, "image/jpeg")),
+                ("files", ("b.png", sample_png_bytes, "image/png")),
+            ],
+            data={
+                "output_format": "webp",
+                "quality": "80",
+                "output_stem": "   ..  ",
+            },
+        )
+        assert response.status_code == 422
+        data = response.json()
+        assert data["detail"]["error"]["code"] == "INVALID_NAMING_CONFIG"
+
+    def test_manifest_output_fields_match_resolved_zip_paths(
+        self, client: TestClient, sample_jpg_bytes: bytes, sample_png_bytes: bytes
+    ) -> None:
+        """manifest.files[].output values match actual ZIP entry paths after sequential naming."""
+        response = client.post(
+            "/api/v1/transform",
+            files=[
+                ("files", ("a.jpg", sample_jpg_bytes, "image/jpeg")),
+                ("files", ("b.png", sample_png_bytes, "image/png")),
+            ],
+            data={
+                "output_format": "webp",
+                "quality": "80",
+                "output_stem": "image",
+            },
+        )
+        assert response.status_code == 200
+        zf = zipfile.ZipFile(io.BytesIO(response.content))
+        manifest = json.loads(zf.read("manifest.json"))
+        zip_names = [n for n in zf.namelist() if n != "manifest.json"]
+        for entry in manifest["files"]:
+            assert entry["output"] in zip_names
+            assert entry["output"].startswith("image-")

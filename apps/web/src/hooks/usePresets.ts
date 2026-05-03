@@ -2,7 +2,7 @@
  * Preset catalog for common optimization use cases.
  * Each preset carries the recommended output configuration for a target surface.
  */
-import type { OutputFormat } from '../App';
+import type { OutputFormat } from '../constants/outputFormat';
 
 export const PRESET_IDS = {
   CUSTOM: 'custom',
@@ -21,6 +21,7 @@ export interface PresetConfig {
   quality: number;
   maxWidth: string;
   maxHeight: string;
+  rationale?: string;
 }
 
 export const PRESET_CATALOG: readonly PresetConfig[] = [
@@ -31,6 +32,7 @@ export const PRESET_CATALOG: readonly PresetConfig[] = [
     quality: 80,
     maxWidth: '1200',
     maxHeight: '1200',
+    rationale: 'WebP — best compression for product images',
   },
   {
     id: PRESET_IDS.HERO_BANNER,
@@ -39,6 +41,7 @@ export const PRESET_CATALOG: readonly PresetConfig[] = [
     quality: 85,
     maxWidth: '1920',
     maxHeight: '800',
+    rationale: 'WebP — optimal quality for hero visuals',
   },
   {
     id: PRESET_IDS.THUMBNAIL,
@@ -47,6 +50,7 @@ export const PRESET_CATALOG: readonly PresetConfig[] = [
     quality: 75,
     maxWidth: '300',
     maxHeight: '300',
+    rationale: 'WebP — smallest files for image grids',
   },
   {
     id: PRESET_IDS.OPEN_GRAPH,
@@ -55,6 +59,7 @@ export const PRESET_CATALOG: readonly PresetConfig[] = [
     quality: 85,
     maxWidth: '1200',
     maxHeight: '630',
+    rationale: 'JPG — universal social card compatibility',
   },
 ] as const;
 

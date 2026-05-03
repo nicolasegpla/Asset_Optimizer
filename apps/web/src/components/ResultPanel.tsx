@@ -1,5 +1,5 @@
 import type { ProcessingState, ImageComparisonPreview, SelectionSummary } from '../App';
-import type { OutputFormat } from '../App';
+import type { OutputFormat } from '../constants/outputFormat';
 import { formatBytes, formatDimensions } from '../utils/formatters';
 import { BatchResultPanel } from './BatchResultPanel';
 

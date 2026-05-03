@@ -17,7 +17,7 @@ It is not just a generic format converter. The goal is to help users convert, co
 
 ## Current Version
 
-- Frontend: `0.6.0`
+- Frontend: `0.7.0`
 - Versioning policy: Semantic Versioning in `0.x` until runtime, contract, and UX are stable enough for `1.0.0`
 
 ## Monorepo Structure
@@ -160,6 +160,14 @@ Returns API health status.
   - Richer sorting across name, savings, sizes, format, and dimensions
   - Separate skipped-file banner for pre-upload exclusions
   - Manifest download and copy-summary actions
+- Naming controls now include:
+  - Single-file prefix/suffix naming without forced renumbering
+  - Batch/folder basename replacement via sequential `output_stem-N`
+  - Custom ZIP naming handled separately from internal output paths
+- Format guidance now includes:
+  - Collapsible format guide with transparency and compatibility hints
+  - Preset rationale shown next to optimization presets
+  - Clearer AVIF availability and caution messaging
 - Folder uploads filter junk/system files before format validation:
   - `.DS_Store`
   - `Thumbs.db`
@@ -202,6 +210,7 @@ This project follows Semantic Versioning (`MAJOR.MINOR.PATCH`), but remains in `
 - `0.4.0` → frontend quality sprint
 - `0.5.0` → runtime and operational hardening
 - `0.6.0` → stronger batch result UX
+- `0.7.0` → output naming controls and format guidance
 - `1.0.0` → first stable public-ready baseline
 
 ## Roadmap
@@ -250,34 +259,29 @@ This project follows Semantic Versioning (`MAJOR.MINOR.PATCH`), but remains in `
 - Separate skipped-file banner for pre-upload exclusions
 - Manifest actions for JSON download and copyable batch summary
 
+#### v0.7.0
+- Single-file naming keeps original basename with optional prefix/suffix
+- Batch and folder naming replace basenames entirely with sequential `output_stem-N`
+- ZIP name customization is separated from internal output naming
+- Static format guidance catalog explains transparency, compatibility, and best-fit use cases
+- Collapsible `FormatGuide` UI and preset rationale improve format selection confidence
+- AVIF guidance and availability messaging are clearer in the transformation settings panel
+
 ### Next
-
-#### v0.7.0 — Stronger product UX follow-up
-
-4. Naming/output controls
-- Rename rules
-- Batch naming strategy
-- Better control over final ZIP / output names
-
-5. Format guidance
-- When to use WEBP
-- When to use AVIF
-- When JPG or PNG is a better choice
-- Smarter recommendations by use case
 
 #### v0.8.0 — Release quality
 
-6. CI basics
+4. CI basics
 - Backend tests
 - Frontend tests
 - Minimum automated checks
 
-7. Deploy/release flow
+5. Deploy/release flow
 - Clear release strategy
 - Version bump policy enforcement
 - Optional stronger tag/release visibility
 
-8. Runtime/onboarding docs
+6. Runtime/onboarding docs
 - Local setup
 - Troubleshooting
 - Dependency/environment guidance
