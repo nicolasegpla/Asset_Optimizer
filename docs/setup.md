@@ -91,7 +91,7 @@ Returns dependency and AVIF status:
 
 ## AVIF Support — Troubleshooting
 
-AVIF encoding requires the `pillow-avif-plugin` package and `libaom-dev` system library.
+AVIF encoding requires the `pillow-avif-plugin` package and `libaom-dev` system library. See [Environment Reference](./environment.md#avif-runtime-detection) for details on how AVIF availability is detected at runtime.
 
 ### Symptoms
 
@@ -122,3 +122,73 @@ curl http://localhost:8000/api/v1/capabilities | grep avif_available
 ```
 
 Should return `"avif_available": true`.
+
+## Docker Troubleshooting
+
+### Port conflicts
+
+If port `5173` (web) or `8000` (api) are already in use:
+
+```bash
+# Find what's using the port
+lsof -i :5173
+lsof -i :8000
+
+# Kill the process or stop the service
+kill <PID>
+docker compose down
+```
+
+Then restart with `docker compose up`.
+
+### Stale volumes
+
+If the database or data volume is in a bad state, remove it before restarting:
+
+```bash
+docker compose down -v
+docker compose up -d
+```
+
+### Image rebuild
+
+If you suspect a corrupted or outdated image:
+
+```bash
+docker compose build --no-cache
+docker compose up -d
+```
+
+## Backend Testing
+
+### Setup
+
+Create a Python virtual environment and install test dependencies:
+
+```bash
+cd apps/api
+python -m venv .venv
+source .venv/bin/activate  # Linux/macOS
+# .\.venv\\Scripts\\activate   # Windows
+pip install -r requirements.txt
+```
+
+### Run all tests
+
+```bash
+pytest
+```
+
+### Run a single test file
+
+```bash
+pytest tests/test_api.py
+```
+
+### Run tests matching a pattern
+
+```bash
+pytest -k "transform"
+```
+
+Test files are located in `apps/api/tests/`. Run pytest from the `apps/api/` directory (or pass the path explicitly).

@@ -17,8 +17,30 @@ It is not just a generic format converter. The goal is to help users convert, co
 
 ## Current Version
 
-- Frontend: `0.7.0`
+- Asset Optimizer: **0.8.0** (web + API aligned)
 - Versioning policy: Semantic Versioning in `0.x` until runtime, contract, and UX are stable enough for `1.0.0`
+- See [Release Process](./docs/release-process.md) to cut a release
+
+## Quickstart
+
+Get a running instance in under 5 minutes:
+
+```bash
+# 1. Clone the repository
+git clone https://github.com/your-username/asset-optimizer.git
+cd asset-optimizer
+
+# 2. Start the app
+docker compose -f docker-compose.yml up -d
+
+# 3. Verify the API is up
+curl http://localhost:8000/health
+
+# 4. Open the web UI
+# → http://localhost:5173
+```
+
+If you want to understand the environment variables and what they do, see [Environment Reference](./docs/environment.md). For host-side setup, dependency details, and troubleshooting, see [Setup & Operations](./docs/setup.md).
 
 ## Monorepo Structure
 
@@ -87,31 +109,18 @@ asset-optimizer/
 
 ## Local Development
 
-### Start the app
+For full setup details (host-side frontend/backend, Docker commands, troubleshooting), see [Setup & Operations](./docs/setup.md).
 
-```bash
-docker compose up -d
-```
+Key references:
 
-The default local ports are:
-
-- Web: `http://localhost:5173`
-- API: `http://localhost:8000`
-
-### Frontend dependency install
-
-If you are working directly inside `apps/web` on the host:
-
-```bash
-cd apps/web
-bun install
-```
-
-If the running web container needs updated dependencies after package changes:
-
-```bash
-docker compose exec web npm install
-```
+| Need | Go to |
+|------|-------|
+| Start both services | `docker compose up -d` |
+| Frontend on host (`bun`) | [Setup: Frontend](./docs/setup.md#frontend-react--vite) |
+| Backend on host (Python) | [Setup: Backend](./docs/setup.md#backend-fastapi) |
+| Port conflicts, stale volumes, rebuilds | [Setup: Docker Troubleshooting](./docs/setup.md#docker-troubleshooting) |
+| Backend testing (`pytest`) | [Setup: Backend Testing](./docs/setup.md#backend-testing) |
+| What env vars mean | [Environment Reference](./docs/environment.md) |
 
 ## API Overview
 
@@ -267,24 +276,15 @@ This project follows Semantic Versioning (`MAJOR.MINOR.PATCH`), but remains in `
 - Collapsible `FormatGuide` UI and preset rationale improve format selection confidence
 - AVIF guidance and availability messaging are clearer in the transformation settings panel
 
+#### v0.8.0
+- Quickstart guide in README for first-run local startup
+- `docs/environment.md` canonical runtime and environment reference
+- Expanded `.env.example` with inline operational comments
+- `docs/setup.md` Docker troubleshooting and backend testing sections
+- GitHub Actions CI with parallel frontend and backend test jobs
+- Manual release flow with `scripts/release.sh`, annotated tags, and release docs
+
 ### Next
-
-#### v0.8.0 — Release quality
-
-4. CI basics
-- Backend tests
-- Frontend tests
-- Minimum automated checks
-
-5. Deploy/release flow
-- Clear release strategy
-- Version bump policy enforcement
-- Optional stronger tag/release visibility
-
-6. Runtime/onboarding docs
-- Local setup
-- Troubleshooting
-- Dependency/environment guidance
 
 ### v1.0.0
 
