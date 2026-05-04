@@ -125,6 +125,26 @@ Should return `"avif_available": true`.
 
 ## Docker Troubleshooting
 
+### Frontend `npm install` fails on Alpine with `EBADPLATFORM`
+
+If the `web` image fails during `npm install` with an error similar to:
+
+```text
+Unsupported platform for @rollup/rollup-linux-x64-gnu
+current: libc musl
+wanted: libc glibc
+```
+
+the frontend dependency tree is forcing a glibc-only Rollup binary while `node:alpine` runs on musl.
+
+#### Fix
+
+- Do **not** declare `@rollup/rollup-linux-x64-gnu` as a direct dependency in `apps/web/package.json`
+- Keep `rollup` as the dependency and let the package manager resolve the correct optional binary for the container platform
+- Rebuild the web image after updating the lockfile
+
+This repository is expected to work with `apps/web/Dockerfile` based on Alpine, so platform-specific Rollup binaries must stay out of direct dependencies.
+
 ### Port conflicts
 
 If port `5173` (web) or `8000` (api) are already in use:
