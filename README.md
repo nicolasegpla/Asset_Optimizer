@@ -298,6 +298,23 @@ Target only when:
 - Batch UX is strong
 - Docs are coherent
 
+#### Mini roadmap toward v1.0.0
+
+1. Production validation
+   - Validate AVIF support in the real server/runtime environment
+   - Run end-to-end smoke tests for single-file, multi-file, folder, naming, and manifest flows
+   - Confirm batch outputs behave consistently outside local development
+
+2. Operational hardening
+   - Keep GitHub Actions CI green on `main`
+   - Enable required status checks for `web-tests` and `api-tests`
+   - Execute a real release using `scripts/release.sh` and verify the documented rollback path
+
+3. Final contract review
+   - Review the public product contract for naming, batch ZIP, manifest, and error behavior
+   - Confirm docs remain aligned with actual runtime and release behavior
+   - Decide whether the project is stable enough to promote from `0.8.x` to `1.0.0`
+
 ## Notes
 
 - SDD planning artifacts are tracked in Engram and ignored from git (`sdd/` is ignored).
