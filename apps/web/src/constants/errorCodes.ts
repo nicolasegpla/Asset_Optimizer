@@ -16,6 +16,10 @@ export const ERROR_COPY = {
     hint: 'Try a smaller batch with fewer than 100 files.',
     title: 'Too many files selected',
   },
+  IMAGE_TOO_LARGE: {
+    hint: 'Try a smaller image or reduce dimensions before uploading.',
+    title: 'The image is too large to process',
+  },
   INVALID_DIMENSIONS: {
     hint: 'Use width and height values between 1 and 10000 pixels.',
     title: 'The resize dimensions are invalid',

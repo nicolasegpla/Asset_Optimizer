@@ -17,7 +17,7 @@ It is not just a generic format converter. The goal is to help users convert, co
 
 ## Current Version
 
-- Asset Optimizer: **0.8.0** (web + API aligned)
+- Asset Optimizer: **0.8.1** (web + API aligned)
 - Versioning policy: Semantic Versioning in `0.x` until runtime, contract, and UX are stable enough for `1.0.0`
 - See [Release Process](./docs/release-process.md) to cut a release
 
@@ -154,7 +154,7 @@ Returns API health status.
 - Max 100 files per request
 - Max 50 MB total upload size
 - Max 50 megapixels per image
-- Max 120 seconds processing time
+- Max 120 seconds cumulative processing time per request
 - `max_width` / `max_height`: `1..10000`
 
 ## Frontend UX Notes
