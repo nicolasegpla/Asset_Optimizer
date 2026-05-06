@@ -300,18 +300,28 @@ Target only when:
 
 #### Mini roadmap toward v1.0.0
 
-1. Production validation
+1. AVIF runtime validation
    - Validate AVIF support in the real server/runtime environment
-   - Run end-to-end smoke tests for single-file, multi-file, folder, naming, and manifest flows
-   - Confirm batch outputs behave consistently outside local development
+   - Confirm successful JPG, PNG, and WEBP to AVIF transformations under the target deployment setup
+   - Verify the fallback UX remains honest when AVIF is unavailable at runtime
 
-2. Operational hardening
+2. End-to-end smoke validation
+   - Run smoke tests for single-file, multi-file, and folder upload flows
+   - Verify naming controls, ZIP output structure, and `manifest.json` behavior
+   - Confirm partial-success batches behave consistently outside local development
+
+3. Release path proof
+   - Execute a real release using `scripts/release.sh`
+   - Verify synchronized version bumps for web and API, annotated tags, and push behavior
+   - Confirm the documented rollback path is accurate in practice
+
+4. Operational enforcement
    - Keep GitHub Actions CI green on `main`
    - Enable required status checks for `web-tests` and `api-tests`
-   - Execute a real release using `scripts/release.sh` and verify the documented rollback path
+   - Treat CI as a merge gate, not only as passive feedback
 
-3. Final contract review
-   - Review the public product contract for naming, batch ZIP, manifest, and error behavior
+5. Final contract review
+   - Review the public product contract for naming, batch ZIP, manifest, limits, and error behavior
    - Confirm docs remain aligned with actual runtime and release behavior
    - Decide whether the project is stable enough to promote from `0.8.x` to `1.0.0`
 
