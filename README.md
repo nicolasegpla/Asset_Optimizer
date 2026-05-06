@@ -17,9 +17,10 @@ It is not just a generic format converter. The goal is to help users convert, co
 
 ## Current Version
 
-- Asset Optimizer: **0.8.1** (web + API aligned)
-- Versioning policy: Semantic Versioning in `0.x` until runtime, contract, and UX are stable enough for `1.0.0`
+- Asset Optimizer: **1.0.0** (web + API aligned)
+- Versioning policy: Semantic Versioning with `1.0.x` now treated as the stable public baseline
 - See [Release Process](./docs/release-process.md) to cut a release
+- See [Version 1.0.0 Contract](./docs/version-1-0-0.md) for the frozen behavior baseline
 
 ## Quickstart
 
@@ -209,7 +210,7 @@ Run the Python test suite from the API app environment as appropriate for your s
 
 ## Versioning Policy
 
-This project follows Semantic Versioning (`MAJOR.MINOR.PATCH`), but remains in `0.x` while the product contract and runtime behavior are still evolving.
+This project follows Semantic Versioning (`MAJOR.MINOR.PATCH`). `1.0.0` marks the first stable public baseline for the current product contract.
 
 ### Practical meaning
 
@@ -220,6 +221,7 @@ This project follows Semantic Versioning (`MAJOR.MINOR.PATCH`), but remains in `
 - `0.5.0` → runtime and operational hardening
 - `0.6.0` → stronger batch result UX
 - `0.7.0` → output naming controls and format guidance
+- `0.9.0` → final stabilization release before stable baseline
 - `1.0.0` → first stable public-ready baseline
 
 ## Roadmap
@@ -284,46 +286,25 @@ This project follows Semantic Versioning (`MAJOR.MINOR.PATCH`), but remains in `
 - GitHub Actions CI with parallel frontend and backend test jobs
 - Manual release flow with `scripts/release.sh`, annotated tags, and release docs
 
+#### v0.9.0
+- Final contract stabilization pass before stable release
+- AVIF runtime validation confirmed in Docker target runtime
+- API smoke validation plus browser smoke coverage added
+- Required status checks activated on `main`
+- Public contract review closed with docs and UX drift corrected
+
+#### v1.0.0
+- Stable public baseline declared
+- Release flow proven with real tags and pushes
+- Core contract frozen in [`docs/version-1-0-0.md`](./docs/version-1-0-0.md)
+
 ### Next
 
 ### v1.0.0
 
-Target only when:
+`v1.0.0` has already been reached.
 
-- Frontend and backend are both reliable
-- AVIF is validated in runtime
-- Development environment is stable
-- CI exists
-- Contract is mature
-- Batch UX is strong
-- Docs are coherent
-
-#### Mini roadmap toward v1.0.0
-
-1. AVIF runtime validation
-   - Validate AVIF support in the real server/runtime environment
-   - Confirm successful JPG, PNG, and WEBP to AVIF transformations under the target deployment setup
-   - Verify the fallback UX remains honest when AVIF is unavailable at runtime
-
-2. End-to-end smoke validation
-   - Run smoke tests for single-file, multi-file, and folder upload flows
-   - Verify naming controls, ZIP output structure, and `manifest.json` behavior
-   - Confirm partial-success batches behave consistently outside local development
-
-3. Release path proof
-   - Execute a real release using `scripts/release.sh`
-   - Verify synchronized version bumps for web and API, annotated tags, and push behavior
-   - Confirm the documented rollback path is accurate in practice
-
-4. Operational enforcement
-   - Keep GitHub Actions CI green on `main`
-   - Enable required status checks for `web-tests` and `api-tests`
-   - Treat CI as a merge gate, not only as passive feedback
-
-5. Final contract review
-   - Review the public product contract for naming, batch ZIP, manifest, limits, and error behavior
-   - Confirm docs remain aligned with actual runtime and release behavior
-   - Decide whether the project is stable enough to promote from `0.8.x` to `1.0.0`
+Use [`docs/version-1-0-0.md`](./docs/version-1-0-0.md) as the source of truth for the stable contract before planning future changes.
 
 ## Notes
 
