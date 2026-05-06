@@ -290,7 +290,7 @@ async def lifespan(app: FastAPI):
 
 # ─── App ──────────────────────────────────────────────────────────────────────
 
-app = FastAPI(title="Asset Optimizer API", version="0.9.0", lifespan=lifespan)
+app = FastAPI(title="Asset Optimizer API", version="1.0.0", lifespan=lifespan)
 
 
 @app.middleware("http")
