@@ -142,6 +142,17 @@ The frontend only advertises AVIF when `/api/v1/capabilities` confirms it.
 
 ## Docker Troubleshooting
 
+### Railway frontend deployment
+
+The frontend should be deployed to Railway as a **production static build**, not with `vite dev`.
+
+- The `apps/web/Dockerfile` builds the app during image creation.
+- The final container serves `dist/` with SPA fallback.
+- Railway must provide `PORT` at runtime.
+- Set `VITE_API_BASE_URL` in Railway **before deploy** so Vite bakes the correct backend URL into the build.
+
+If `VITE_API_BASE_URL` changes later, redeploy the frontend so a new build is produced with the updated value.
+
 ### Frontend `npm install` fails on Alpine with `EBADPLATFORM`
 
 If the `web` image fails during `npm install` with an error similar to:

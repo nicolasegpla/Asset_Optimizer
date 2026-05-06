@@ -1,12 +1,24 @@
+FROM oven/bun:1.3.5-alpine AS builder
+
+WORKDIR /app
+
+COPY package.json bun.lock ./
+RUN bun install --frozen-lockfile
+
+COPY . .
+RUN bun run build
+
+
 FROM node:20-alpine
 
 WORKDIR /app
 
-COPY package.json ./
-RUN npm install
+# Install a pinned static server for production asset delivery.
+RUN npm install -g serve@14.2.4
 
-COPY . .
+# Built assets from builder stage
+COPY --from=builder /app/dist ./dist
 
-EXPOSE 5173
+EXPOSE 3000
 
-CMD ["npm", "run", "dev"]
+CMD ["sh", "-c", "serve -s dist -l ${PORT:-3000} --no-port-switching"]
