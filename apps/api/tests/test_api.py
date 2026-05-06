@@ -99,6 +99,53 @@ class TestAvifTransformGuard:
         data = response.json()
         assert data["detail"]["error"]["code"] == "AVIF_UNAVAILABLE"
 
+    def test_avif_accepted_returns_valid_avif_bytes(
+        self, client: TestClient, sample_jpg_bytes: bytes
+    ) -> None:
+        """Positive-path AVIF: when runtime supports it, transform returns a real AVIF file."""
+        caps = client.get("/api/v1/capabilities").json()
+        if not caps["avif_available"]:
+            pytest.skip("AVIF is not available in this runtime")
+
+        response = client.post(
+            "/api/v1/transform",
+            files={"files": ("test.jpg", sample_jpg_bytes, "image/jpeg")},
+            data={"output_format": "avif", "quality": "80"},
+        )
+        assert response.status_code == 200, (
+            f"Expected 200, got {response.status_code}: {response.text}"
+        )
+
+        # Headers confirm binary output
+        assert response.headers["content-type"] in (
+            "image/avif",
+            "image/avif-sequence",
+        ), f"Expected image/avif content-type, got {response.headers['content-type']}"
+        assert "content-disposition" in response.headers
+        disp = response.headers["content-disposition"]
+        assert "avif" in disp.lower(), f"Expected .avif in Content-Disposition, got: {disp}"
+
+        # Response body is non-empty
+        body = response.content
+        assert len(body) > 0, "Expected non-empty AVIF response body"
+
+        # AVIF file signature: ISOBMFF ftyp box at offset 4
+        # AVIF files have `ftyp` brand `avif` — byte pattern: 00 00 00 ?? ftyp 61 76 69 66
+        # Minimum AVIF is > 32 bytes; skip tiny bodies that can't possibly be valid
+        if len(body) >= 32:
+            assert body[4:8] == b"ftyp", (
+                f"Expected 'ftyp' at offset 4 (AVIF ISOBMFF), got {body[4:8]!r}"
+            )
+            brand = body[8:12]
+            assert brand == b"avif", f"Expected 'avif' brand at offset 8, got {brand!r}"
+
+        # Verify Pillow can open it as AVIF
+        from PIL import Image
+        with Image.open(io.BytesIO(body)) as img:
+            assert img.format.lower() in ("avif", "heif"), (
+                f"Pillow recognized format as {img.format}, expected AVIF/HEIF"
+            )
+
     def test_avif_accepted_when_available(self, client: TestClient, sample_jpg_bytes: bytes) -> None:
         """When runtime profile says AVIF available, transform accepts AVIF."""
         caps = client.get("/api/v1/capabilities").json()

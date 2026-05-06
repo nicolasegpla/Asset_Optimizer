@@ -51,11 +51,27 @@ Response:
 
 `avif_available: true` means AVIF encoding is working. If AVIF is unavailable, `avif_available` is `false` and `avif` does not appear in `output_formats`. See [Setup & Operations](./setup.md#avif-support--troubleshooting) for fix instructions.
 
+### Validated Runtime Baseline
+
+The current project baseline has already been validated in the Docker runtime defined by this repo:
+
+- container path: `docker compose` -> `api`
+- base image: `python:3.12-slim`
+- AVIF positive path confirmed for `JPG -> AVIF`, `PNG -> AVIF`, and `WEBP -> AVIF`
+- `/health` and `/api/v1/capabilities` both reported `avif_available: true` during validation
+
+This is the runtime currently treated as the trusted AVIF-capable environment for local and containerized development.
+
 ### What triggers AVIF detection
 
 - `pillow-avif-plugin` Python package installed
 - `libaom-dev` system library present (installed in the Docker container via apt)
 - If either is missing, the API logs `Startup: AVIF=False` and AVIF is excluded from the capabilities response
+
+### UI Safety Rule
+
+The frontend should not advertise AVIF without confirmation from `/api/v1/capabilities`.
+If the API is online but the capabilities request fails, the UI should fall back to `AVIF unavailable` rather than assuming support.
 
 ## Docker Compose Healthcheck Defaults
 

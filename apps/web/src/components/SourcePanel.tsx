@@ -197,7 +197,7 @@ export function SourcePanel({
 
       <div className="summary-box">
         <strong>{selectedFiles.length}</strong>
-        <span>files selected</span>
+        <span> file{selectedFiles.length !== 1 ? 's' : ''} selected</span>
         <span>{totalSizeLabel} total</span>
         {selectionSummary && (
           <>

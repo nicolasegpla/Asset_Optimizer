@@ -70,6 +70,16 @@ Returns:
 
 `avif` appears in `output_formats` only when AVIF encoding is detected as working at startup.
 
+### Current Validation Status
+
+AVIF has been validated in the default Docker runtime used by this project:
+
+- target runtime: `docker compose` API service based on `python:3.12-slim`
+- successful single-file transforms confirmed for `JPG -> AVIF`, `PNG -> AVIF`, and `WEBP -> AVIF`
+- batch AVIF output also validated in the Docker runtime
+
+This means the positive path is confirmed for the current container baseline, not just assumed from dependencies.
+
 ### Health Endpoint
 
 ```bash
@@ -122,6 +132,13 @@ curl http://localhost:8000/api/v1/capabilities | grep avif_available
 ```
 
 Should return `"avif_available": true`.
+
+### Frontend Fallback Behavior
+
+The frontend only advertises AVIF when `/api/v1/capabilities` confirms it.
+
+- If `health` and `limits` succeed but `capabilities` fails, AVIF is treated as unavailable in the UI.
+- If the whole API is offline, the UI keeps its optimistic default and the backend remains the final authority once the API is reachable again.
 
 ## Docker Troubleshooting
 

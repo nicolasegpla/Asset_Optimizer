@@ -11,3 +11,5 @@ __pycache__/
 .atl/
 sdd/
 *.tsbuildinfo
+apps/web/test-results/
+apps/web/playwright-report/
