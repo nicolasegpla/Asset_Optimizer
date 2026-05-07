@@ -1,28 +1,50 @@
-# Asset Optimizer
+<p align="center">
+  <img src="./apps/web/public/logo-app.svg" alt="Asset Optimizer logo" width="120" />
+</p>
 
-Asset Optimizer is a web product focused on preparing images for websites, e-commerce, and digital products.
+<h1 align="center">Asset Optimizer</h1>
 
-It is not just a generic format converter. The goal is to help users convert, compress, resize, and package assets so they are ready for publishing with better performance, compatibility, and lower file size.
+<p align="center">
+  <strong>Convert, compress, resize, and package web-ready image assets.</strong>
+</p>
 
-## Product Positioning
+<p align="center">
+  Built for websites, e-commerce, and digital products that need lighter assets without losing workflow clarity.
+</p>
 
-> Convert, compress, and adapt images for web and e-commerce in seconds.
+<p align="center">
+  <img alt="Version" src="https://img.shields.io/badge/version-1.0.0-2f855a?style=flat-square" />
+  <img alt="Frontend" src="https://img.shields.io/badge/frontend-React%20%2B%20TypeScript-2563eb?style=flat-square" />
+  <img alt="Backend" src="https://img.shields.io/badge/backend-FastAPI-059669?style=flat-square" />
+  <img alt="Deploy" src="https://img.shields.io/badge/deploy-Railway-7c3aed?style=flat-square" />
+</p>
 
-## Target Users
+---
+
+## ✨ Why this project exists
+
+Asset Optimizer is focused on one job: preparing images so they are actually ready to publish.
+
+It is not just a generic format converter. The product goal is to help users convert, compress, resize, and package assets so they ship with better performance, better compatibility, and lower file size.
+
+## 🎯 Who it is for
 
 - People building websites
 - E-commerce teams managing product images
 - Creators preparing assets for digital products
 - Developers and designers optimizing images for the web
 
-## Current Version
+## 🚀 Current baseline
 
-- Asset Optimizer: **1.0.0** (web + API aligned)
-- Versioning policy: Semantic Versioning with `1.0.x` now treated as the stable public baseline
-- See [Release Process](./docs/release-process.md) to cut a release
-- See [Version 1.0.0 Contract](./docs/version-1-0-0.md) for the frozen behavior baseline
+| Topic | Status |
+|------|--------|
+| Stable version | **1.0.0** |
+| Product contract | Frozen in [`docs/version-1-0-0.md`](./docs/version-1-0-0.md) |
+| Release lane | [`docs/release-process.md`](./docs/release-process.md) |
+| Runtime / env reference | [`docs/environment.md`](./docs/environment.md) |
+| Setup / operations | [`docs/setup.md`](./docs/setup.md) |
 
-## Quickstart
+## ⚡ Quickstart
 
 Get a running instance in under 5 minutes:
 
@@ -41,9 +63,35 @@ curl http://localhost:8000/health
 # → http://localhost:5173
 ```
 
-If you want to understand the environment variables and what they do, see [Environment Reference](./docs/environment.md). For host-side setup, dependency details, and troubleshooting, see [Setup & Operations](./docs/setup.md).
+If you want to understand the environment variables and what they do, see [Environment Reference](./docs/environment.md). For host-side setup, dependency details, troubleshooting, and Railway notes, see [Setup & Operations](./docs/setup.md).
 
-## Monorepo Structure
+## 🧭 At a glance
+
+### Core flows
+
+- Upload one file and get a direct optimized download
+- Upload multiple files or a folder and get a ZIP package
+- Keep batch metadata with `manifest.json`
+- Use AVIF only when the runtime actually supports it
+- Preserve folder paths when the browser provides them
+
+### Supported formats
+
+| Input | Output |
+|------|--------|
+| JPG / JPEG | JPG / JPEG |
+| PNG | PNG |
+| WEBP | WEBP |
+| — | AVIF |
+
+### Key product rules
+
+- **Single file** → direct file download
+- **Multiple files / folder** → ZIP download
+- **Batch ZIPs** include `manifest.json`
+- **Partial success** is supported, valid files still return when others fail
+
+## 🏗️ Monorepo structure
 
 ```txt
 asset-optimizer/
@@ -56,37 +104,17 @@ asset-optimizer/
   CLAUDE.md
 ```
 
-## Tech Stack
+## 🧰 Tech stack
 
-### Frontend
-- React 19
-- TypeScript
-- Vite
-- Vitest + React Testing Library + happy-dom
+| Layer | Tools |
+|------|-------|
+| Frontend | React 19, TypeScript, Vite |
+| Backend | Python, FastAPI, Pillow, pillow-avif-plugin |
+| Testing | Vitest, React Testing Library, pytest, Playwright smoke |
+| Local infra | Docker Compose, Bun |
+| Deploy | Railway |
 
-### Backend
-- Python
-- FastAPI
-- Pillow / AVIF plugin support
-
-### Local Environment
-- Docker Compose
-- Bun for local frontend dependency workflow
-
-## Supported Formats
-
-### Input
-- JPG / JPEG
-- PNG
-- WEBP
-
-### Output
-- JPG / JPEG
-- PNG
-- WEBP
-- AVIF
-
-## Core Features
+## ✅ Core features
 
 - Upload one or multiple image files
 - Select a full folder from the browser
@@ -100,7 +128,7 @@ asset-optimizer/
 - Batch manifest metadata inside ZIPs
 - Partial success in batch processing
 
-## Batch Processing Rules
+## 📦 Batch processing rules
 
 - Single file → direct download
 - Multiple files or folder → ZIP download
@@ -108,7 +136,7 @@ asset-optimizer/
 - Batch ZIPs include `manifest.json` with per-file outputs, errors, and summary totals
 - Partial success is supported: valid files still return even if some files fail
 
-## Local Development
+## 🛠️ Local development
 
 For full setup details (host-side frontend/backend, Docker commands, troubleshooting), see [Setup & Operations](./docs/setup.md).
 
@@ -123,7 +151,7 @@ Key references:
 | Backend testing (`pytest`) | [Setup: Backend Testing](./docs/setup.md#backend-testing) |
 | What env vars mean | [Environment Reference](./docs/environment.md) |
 
-## API Overview
+## 🔌 API overview
 
 ### `POST /api/v1/transform`
 
@@ -150,7 +178,7 @@ Returns backend-enforced limits for frontend display.
 
 Returns API health status.
 
-## Processing Limits
+## 📏 Processing limits
 
 - Max 100 files per request
 - Max 50 MB total upload size
@@ -158,7 +186,7 @@ Returns API health status.
 - Max 120 seconds cumulative processing time per request
 - `max_width` / `max_height`: `1..10000`
 
-## Frontend UX Notes
+## 🖥️ Frontend UX notes
 
 - Presets currently available:
   - E-commerce Product
@@ -186,7 +214,7 @@ Returns API health status.
   - files inside `__MACOSX`, `.git`, `.vscode`
 - If `/api/v1/limits` is unavailable, the frontend falls back silently to defaults.
 
-## Testing
+## 🧪 Testing
 
 ### Frontend
 
@@ -200,7 +228,7 @@ bun run test:watch
 
 Run the Python test suite from the API app environment as appropriate for your setup.
 
-## Architecture Notes
+## 🧠 Architecture notes
 
 - Processing is synchronous in the current product line
 - Batch ZIP structure is driven by the optional `paths` field
@@ -208,7 +236,7 @@ Run the Python test suite from the API app environment as appropriate for your s
 - JPG output composites transparency onto white background
 - AVIF support depends on runtime/container support and should be validated in the deployment environment
 
-## Versioning Policy
+## 🔖 Versioning policy
 
 This project follows Semantic Versioning (`MAJOR.MINOR.PATCH`). `1.0.0` marks the first stable public baseline for the current product contract.
 
@@ -224,7 +252,7 @@ This project follows Semantic Versioning (`MAJOR.MINOR.PATCH`). `1.0.0` marks th
 - `0.9.0` → final stabilization release before stable baseline
 - `1.0.0` → first stable public-ready baseline
 
-## Roadmap
+## 🗺️ Roadmap
 
 ### Completed
 
@@ -306,7 +334,7 @@ This project follows Semantic Versioning (`MAJOR.MINOR.PATCH`). `1.0.0` marks th
 
 Use [`docs/version-1-0-0.md`](./docs/version-1-0-0.md) as the source of truth for the stable contract before planning future changes.
 
-## Notes
+## 📝 Notes
 
 - SDD planning artifacts are tracked in Engram and ignored from git (`sdd/` is ignored).
 - Project conventions and deeper planning context also live in `CLAUDE.md` and `docs/monorepo.md`.
