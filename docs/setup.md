@@ -153,6 +153,30 @@ The frontend should be deployed to Railway as a **production static build**, not
 
 If `VITE_API_BASE_URL` changes later, redeploy the frontend so a new build is produced with the updated value.
 
+#### Railway quick path
+
+1. **Frontend service**
+   - Root directory: `apps/web`
+   - Variable: `VITE_API_BASE_URL=https://<your-backend-domain>`
+   - Redeploy the frontend after changing this variable because it is used at build time.
+
+2. **Backend service**
+   - Variable: `CORS_ORIGINS=https://<your-frontend-domain>`
+   - Redeploy the backend after changing this variable because FastAPI reads it at startup.
+
+3. **Verify**
+   - Frontend service responds with `200` on `/`
+   - Browser requests go to the Railway backend URL, not `http://localhost:8000`
+   - `/health`, `/api/v1/limits`, `/api/v1/capabilities`, and `/api/v1/transform` succeed from the deployed frontend
+
+#### Railway gotchas already seen in this project
+
+- Do **not** run `vite dev` in production.
+- Do **not** leave the public frontend domain pointed at port `5173`; Railway must route to the runtime port used by the container.
+- Do **not** put `CORS_ORIGINS` on the frontend service.
+- Do **not** put `VITE_API_BASE_URL` on the backend service.
+- If the frontend still calls `http://localhost:8000`, rebuild/redeploy the frontend and make sure the build cache is not reusing an old bundle.
+
 ### Frontend `npm install` fails on Alpine with `EBADPLATFORM`
 
 If the `web` image fails during `npm install` with an error similar to:

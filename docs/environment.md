@@ -93,6 +93,22 @@ The healthcheck polls `GET /health`. When `docker compose up -d` reports the `ap
 | `VITE_API_BASE_URL` | ✅ (build-time) | ❌ | Frontend reads this at Vite build time via `import.meta.env`. Changes require a frontend rebuild. |
 | `CORS_ORIGINS` | ❌ | ✅ | FastAPI reads this at startup. Changes require an API restart. |
 
+### Railway mapping
+
+For Railway deployments, keep the variables separated by service responsibility:
+
+| Service | Variable | Example value |
+|---------|----------|---------------|
+| Frontend | `VITE_API_BASE_URL` | `https://assetoptimizer-production.up.railway.app` |
+| Backend | `CORS_ORIGINS` | `https://assetoptimizer-production-b5fe.up.railway.app` |
+
+Rules:
+
+- `VITE_API_BASE_URL` belongs to the **frontend** only.
+- `CORS_ORIGINS` belongs to the **backend** only.
+- `VITE_API_BASE_URL` must point to the backend public URL.
+- `CORS_ORIGINS` must include the frontend public origin exactly.
+
 ## Relationship to `.env.example`
 
 `.env.example` in the project root is the **copyable template** for local development. It contains the two variables currently recognized by the application:
