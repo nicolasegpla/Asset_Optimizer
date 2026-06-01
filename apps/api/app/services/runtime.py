@@ -3,11 +3,12 @@ from __future__ import annotations
 
 import io
 import logging
+import subprocess
 from dataclasses import dataclass, field
 
 from PIL import Image
 
-__all__ = ["RuntimeProfile", "build_runtime_profile", "probe_avif"]
+__all__ = ["RuntimeProfile", "build_runtime_profile", "probe_avif", "probe_gltf_transform"]
 
 logger = logging.getLogger(__name__)
 
@@ -15,6 +16,7 @@ logger = logging.getLogger(__name__)
 @dataclass(frozen=True)
 class RuntimeProfile:
     avif_available: bool
+    gltf_transform_available: bool
     pillow_version: str
     dependency_status: dict[str, str]
 
@@ -69,21 +71,42 @@ def probe_avif() -> bool:
         return False
 
 
+def probe_gltf_transform() -> bool:
+    """
+    Probe whether the gltf-transform CLI is installed and callable.
+    Returns True if `gltf-transform --version` exits 0.
+    """
+    try:
+        result = subprocess.run(
+            ["gltf-transform", "--version"],
+            capture_output=True,
+            timeout=10,
+            check=False,
+        )
+        return result.returncode == 0
+    except Exception as e:
+        logger.debug("gltf-transform probe failed: %s", e)
+        return False
+
+
 def build_runtime_profile() -> RuntimeProfile:
     """Build the runtime profile: probe AVIF, collect version/status, return dataclass."""
     avif_available = probe_avif()
+    gltf_transform_available = probe_gltf_transform()
     pillow_version = get_pillow_version()
     dependency_status = get_dependency_status()
 
     # Startup log
     logger.info(
-        "Startup: AVIF=%s, Pillow=%s",
+        "Startup: AVIF=%s, gltf-transform=%s, Pillow=%s",
         avif_available,
+        gltf_transform_available,
         pillow_version,
     )
 
     return RuntimeProfile(
         avif_available=avif_available,
+        gltf_transform_available=gltf_transform_available,
         pillow_version=pillow_version,
         dependency_status=dependency_status,
     )
