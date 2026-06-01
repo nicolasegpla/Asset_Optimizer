@@ -19,6 +19,11 @@ class ErrorCode(str, Enum):
     INVALID_PATHS_FORMAT = "INVALID_PATHS_FORMAT"
     AVIF_UNAVAILABLE = "AVIF_UNAVAILABLE"
     INVALID_NAMING_CONFIG = "INVALID_NAMING_CONFIG"
+    INVALID_GLB = "INVALID_GLB"
+    GLB_TOO_LARGE = "GLB_TOO_LARGE"
+    GLB_OPTIMIZATION_FAILED = "GLB_OPTIMIZATION_FAILED"
+    GLB_RUNTIME_UNAVAILABLE = "GLB_RUNTIME_UNAVAILABLE"
+    MIXED_FILE_TYPES = "MIXED_FILE_TYPES"
 
 
 class ErrorDetail(BaseModel):
@@ -35,6 +40,8 @@ class LimitsResponse(BaseModel):
     max_files: int
     max_total_bytes: int
     max_pixels: int
+    max_glb_per_file: int = 100 * 1024 * 1024  # 100 MB
+    max_glb_total_bytes: int = 500 * 1024 * 1024  # 500 MB
 
 
 # ─── Batch manifest / partial-success schemas ──────────────────────────────────
