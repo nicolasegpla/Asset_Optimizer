@@ -33,6 +33,11 @@ from app.services.transform import (
     SUPPORTED_OUTPUT_FORMATS,
     transform_image,
 )
+from app.services.glb_optimizer import (
+    GlbOptimizationMetadata,
+    optimize_glb,
+    validate_glb_magic,
+)
 from app.services.naming import NamingConfig, resolve_single_output_name, resolve_batch_output_name, resolve_zip_name, sanitize_naming_config
 
 # ─── Logging ───────────────────────────────────────────────────────────────────
@@ -45,6 +50,10 @@ MAX_FILES = 100
 MAX_TOTAL_BYTES = 50 * 1024 * 1024  # 50 MB
 MAX_PIXELS = 50 * 1024 * 1024  # 50 megapixels
 PROCESSING_TIMEOUT_SECONDS = 120
+
+# GLB-specific limits
+MAX_GLB_PER_FILE = 100 * 1024 * 1024  # 100 MB
+MAX_GLB_TOTAL_BYTES = 500 * 1024 * 1024  # 500 MB
 
 DEFAULT_CORS_ORIGINS = (
     'http://localhost:5173',
@@ -119,7 +128,7 @@ async def _read_upload_file(file: UploadFile) -> bytes:
     return await file.read()
 
 
-def _check_limits(files: list[UploadFile], total_bytes: int) -> None:
+def _check_limits(files: list[UploadFile], total_bytes: int, max_total_bytes: int = MAX_TOTAL_BYTES) -> None:
     """Enforce hard limits on file count and total size."""
     if len(files) > MAX_FILES:
         _raise_error(
@@ -128,11 +137,11 @@ def _check_limits(files: list[UploadFile], total_bytes: int) -> None:
             {"max_files": MAX_FILES, "received": len(files)},
         )
 
-    if total_bytes > MAX_TOTAL_BYTES:
+    if total_bytes > max_total_bytes:
         _raise_error(
             ErrorCode.TOTAL_SIZE_LIMIT,
-            f"Total upload size exceeds {MAX_TOTAL_BYTES // (1024*1024)} MB limit.",
-            {"max_bytes": MAX_TOTAL_BYTES, "received_bytes": total_bytes},
+            f"Total upload size exceeds {max_total_bytes // (1024*1024)} MB limit.",
+            {"max_bytes": max_total_bytes, "received_bytes": total_bytes},
         )
 
 
@@ -276,6 +285,98 @@ def _build_manifest_payload(
     }
 
 
+@dataclass
+class ProcessedGlbFile:
+    relative_path: str
+    filename: str
+    data: bytes
+    original_bytes: int
+    optimized_bytes: int
+    compression_ratio: float
+
+
+def _try_validate_glb(file: UploadFile, data: bytes) -> BatchFileError | None:
+    """
+    Validate a single GLB file's extension, size, and magic bytes.
+    Returns a BatchFileError if validation fails, or None if it passes.
+    """
+    ext = _normalize_extension(file.filename or "")
+    if ext != "glb":
+        return BatchFileError(
+            source=file.filename or "unknown",
+            code=ErrorCode.INVALID_GLB,
+            message=f"File '{file.filename}' is not a GLB file.",
+        )
+
+    if len(data) > MAX_GLB_PER_FILE:
+        return BatchFileError(
+            source=file.filename or "unknown",
+            code=ErrorCode.GLB_TOO_LARGE,
+            message=f"GLB file '{file.filename}' exceeds {MAX_GLB_PER_FILE // (1024 * 1024)} MB limit.",
+        )
+
+    try:
+        validate_glb_magic(data)
+    except ValueError as e:
+        return BatchFileError(
+            source=file.filename or "unknown",
+            code=ErrorCode.INVALID_GLB,
+            message=f"File '{file.filename}' is corrupt or not a valid GLB: {e}",
+        )
+
+    return None
+
+
+def _build_glb_single_response(result: ProcessedGlbFile) -> Response:
+    """Build a single-file GLB download response with compression headers."""
+    headers = {
+        "Content-Disposition": f'attachment; filename="{result.filename}"',
+        "Content-Type": "model/gltf-binary",
+        "X-Asset-Original-Bytes": str(result.original_bytes),
+        "X-Asset-Optimized-Bytes": str(result.optimized_bytes),
+        "X-Asset-Compression-Ratio": f"{result.compression_ratio:.2f}",
+    }
+    return Response(content=result.data, media_type="model/gltf-binary", headers=headers)
+
+
+def _build_glb_manifest_payload(
+    processed: list[ProcessedGlbFile],
+    resolved_paths: list[str],
+    batch_errors: list[BatchFileError],
+) -> dict:
+    """Build the manifest.json dict for a GLB batch ZIP."""
+    manifest_files = []
+    for p, resolved_path in zip(processed, resolved_paths):
+        manifest_files.append({
+            "source": p.filename,
+            "output": resolved_path,
+            "originalBytes": p.original_bytes,
+            "optimizedBytes": p.optimized_bytes,
+            "compressionRatio": round(p.compression_ratio, 4),
+        })
+
+    manifest_errors = [
+        {"source": e.source, "code": e.code.value, "message": e.message}
+        for e in batch_errors
+    ]
+
+    total_original = sum(p.original_bytes for p in processed)
+    total_optimized = sum(p.optimized_bytes for p in processed)
+    total_files = len(processed) + len(batch_errors)
+
+    return {
+        "files": manifest_files,
+        "errors": manifest_errors,
+        "summary": {
+            "totalFiles": total_files,
+            "processedFiles": len(manifest_files),
+            "failedFiles": len(manifest_errors),
+            "totalOriginalBytes": total_original,
+            "totalOptimizedBytes": total_optimized,
+        },
+    }
+
+
 # ─── App lifecycle ─────────────────────────────────────────────────────────────
 
 import os
@@ -353,6 +454,7 @@ async def healthcheck(request: Request) -> dict[str, Any]:
         "status": "online",
         "service": "asset-optimizer-api",
         "avif_available": profile.avif_available,
+        "gltf_transform_available": profile.gltf_transform_available,
         "dependencies": {
             "pillow": {
                 "version": profile.pillow_version,
@@ -361,6 +463,10 @@ async def healthcheck(request: Request) -> dict[str, Any]:
             "avif_encoder": {
                 "available": profile.avif_available,
                 "status": "ok" if profile.avif_available else "unavailable",
+            },
+            "gltf_transform": {
+                "available": profile.gltf_transform_available,
+                "status": "ok" if profile.gltf_transform_available else "unavailable",
             },
         },
     }
@@ -395,6 +501,8 @@ async def get_limits() -> LimitsResponse:
         max_files=MAX_FILES,
         max_total_bytes=MAX_TOTAL_BYTES,
         max_pixels=MAX_PIXELS,
+        max_glb_per_file=MAX_GLB_PER_FILE,
+        max_glb_total_bytes=MAX_GLB_TOTAL_BYTES,
     )
 
 
@@ -628,6 +736,237 @@ async def transform_assets(
         _, resolved = zip_transformed_assets(archived)
 
         manifest_data = _build_manifest_payload(
+            processed,
+            [r.resolved_path for r in resolved],
+            all_errors,
+        )
+
+        zip_bytes, _ = zip_transformed_assets(archived, manifest_entries=manifest_data)
+
+        # Resolve ZIP filename — sanitize user stem or fall back to default
+        resolved_zip_name = resolve_zip_name(naming_config.zip_name)
+
+        return _build_zip_response(
+            zip_bytes,
+            len(processed),
+            processed_original,
+            processed_optimized,
+            resolved_zip_name,
+            error_count=len(all_errors),
+        )
+
+
+@app.post("/api/v1/optimize-glb")
+async def optimize_glb_assets(
+    request: Request,
+    files: list[UploadFile] = File(...),
+    paths: str | None = Form(default=None),
+    zip_name: str | None = Form(default=None),
+    output_prefix: str | None = Form(default=None),
+    output_suffix: str | None = Form(default=None),
+    output_stem: str | None = Form(default=None),
+) -> Response:
+    """
+    Optimize one or more GLB files: deduplicate, prune, quantize, compress with Draco.
+    Single file → direct .glb download. Multiple files → ZIP.
+    """
+    request_id = getattr(request.state, "request_id", "unknown")
+
+    # ── Validate naming config ───────────────────────────────────────────────
+    try:
+        naming_config = sanitize_naming_config(zip_name, output_prefix, output_suffix, output_stem)
+    except ValueError as e:
+        _raise_error(
+            ErrorCode.INVALID_NAMING_CONFIG,
+            f"Invalid naming field: {e}",
+        )
+
+    # ── Enforce hard limits ──────────────────────────────────────────────────
+    total_bytes = _count_bytes(files)
+    _check_limits(files, total_bytes, max_total_bytes=MAX_GLB_TOTAL_BYTES)
+
+    if not files:
+        _raise_error(ErrorCode.FILE_COUNT_LIMIT, "No files provided.", {"max_files": MAX_FILES, "received": 0})
+
+    # ── Reject mixed file types ──────────────────────────────────────────────
+    has_glb = any(_normalize_extension(f.filename or "") == "glb" for f in files)
+    has_non_glb = any(_normalize_extension(f.filename or "") != "glb" for f in files)
+    if has_glb and has_non_glb:
+        _raise_error(
+            ErrorCode.MIXED_FILE_TYPES,
+            "Mixed file types are not supported. Upload only GLB files or only image files.",
+            {"glb_files": sum(1 for f in files if _normalize_extension(f.filename or "") == "glb"),
+             "non_glb_files": sum(1 for f in files if _normalize_extension(f.filename or "") != "glb")},
+        )
+
+    # ── Read all file bytes and validate (per-file, collect errors) ──────────
+    file_data_pairs: list[tuple[UploadFile, bytes]] = []
+    batch_errors: list[BatchFileError] = []
+
+    for f in files:
+        data = await _read_upload_file(f)
+        err = _try_validate_glb(f, data)
+        if err is not None:
+            batch_errors.append(err)
+        else:
+            file_data_pairs.append((f, data))
+
+    # All files failed validation → 422 with per-file error list (no ZIP)
+    if not file_data_pairs and batch_errors:
+        all_fail_payload = BatchAllFailPayload(
+            error=ErrorDetail(
+                code=ErrorCode.INVALID_GLB,
+                message=f"All {len(files)} files failed processing.",
+                details={
+                    "totalFiles": len(files),
+                    "failedFiles": len(batch_errors),
+                    "errors": [e.model_dump() for e in batch_errors],
+                },
+            )
+        )
+        raise HTTPException(status_code=422, detail=all_fail_payload.model_dump(mode="json"))
+
+    # ── Runtime guard ────────────────────────────────────────────────────────
+    profile: RuntimeProfile | None = getattr(request.app.state, "runtime_profile", None)
+    if profile is None:
+        from app.services.runtime import build_runtime_profile
+        profile = build_runtime_profile()
+    if not profile.gltf_transform_available:
+        _raise_error(
+            ErrorCode.GLB_RUNTIME_UNAVAILABLE,
+            "GLB optimization runtime is not available.",
+            {"gltf_transform_available": False},
+        )
+        all_fail_payload = BatchAllFailPayload(
+            error=ErrorDetail(
+                code=ErrorCode.INVALID_GLB,
+                message=f"All {len(files)} files failed processing.",
+                details={
+                    "totalFiles": len(files),
+                    "failedFiles": len(batch_errors),
+                    "errors": [e.model_dump() for e in batch_errors],
+                },
+            )
+        )
+        raise HTTPException(status_code=422, detail=all_fail_payload.model_dump(mode="json"))
+
+    # ── Resolve folder-structure paths (optional) ─────────────────────────────
+    resolved_paths: list[str] | None = None
+    if paths is not None:
+        resolved_paths = resolve_upload_paths(files, paths)
+
+    # ── Process files (per-file try/except, collect successes and failures) ──
+    start_time = time.monotonic()
+    processed: list[ProcessedGlbFile] = []
+    processed_original = 0
+    processed_optimized = 0
+    transform_errors: list[BatchFileError] = []
+
+    for idx, (file, data) in enumerate(file_data_pairs):
+        elapsed = time.monotonic() - start_time
+        if elapsed > PROCESSING_TIMEOUT_SECONDS:
+            # Mark remaining files as timeout errors
+            for remaining_file, _ in file_data_pairs[idx:]:
+                transform_errors.append(
+                    BatchFileError(
+                        source=remaining_file.filename or "unknown",
+                        code=ErrorCode.PROCESSING_TIMEOUT,
+                        message="Processing timed out. Try fewer or smaller files.",
+                    )
+                )
+            break
+
+        # Use resolved path if provided, otherwise fall back to webkitRelativePath/filename
+        if resolved_paths is not None:
+            source_relative_path = resolved_paths[idx]
+        else:
+            source_relative_path = getattr(file, "webkitRelativePath", "") or file.filename or "unknown"
+
+        source_filename = file.filename or "unknown"
+
+        # For GLB, extension stays .glb
+        relative_path = source_relative_path
+        filename = source_filename
+
+        # Apply single-file naming: preserves original basename + prefix/suffix, no numbering.
+        relative_path = resolve_single_output_name(relative_path, naming_config, "glb")
+        filename = resolve_single_output_name(filename, naming_config, "glb")
+
+        # Per-file DEBUG start log
+        logger.debug(
+            "glb_optimize_start: request_id=%s filename=%s original_bytes=%s",
+            request_id,
+            source_filename,
+            len(data),
+        )
+
+        try:
+            optimized_data, metadata = await optimize_glb(data)
+        except Exception as e:
+            # Per-file ERROR log
+            logger.error(
+                "glb_optimize_error: request_id=%s filename=%s error=%s",
+                request_id,
+                source_filename,
+                str(e),
+            )
+            transform_errors.append(
+                BatchFileError(
+                    source=source_filename,
+                    code=ErrorCode.GLB_OPTIMIZATION_FAILED,
+                    message=f"Failed to optimize '{source_filename}': {e}",
+                )
+            )
+            continue
+
+        # Per-file DEBUG completion log
+        duration_ms = round((time.monotonic() - start_time) * 1000)
+        logger.debug(
+            "glb_optimize_end: request_id=%s filename=%s duration_ms=%s optimized_bytes=%s compression_ratio=%.2f",
+            request_id,
+            source_filename,
+            duration_ms,
+            metadata.optimized_bytes,
+            metadata.compression_ratio,
+        )
+
+        processed.append(
+            ProcessedGlbFile(
+                relative_path=relative_path,
+                filename=filename,
+                data=optimized_data,
+                original_bytes=metadata.original_bytes,
+                optimized_bytes=metadata.optimized_bytes,
+                compression_ratio=metadata.compression_ratio,
+            )
+        )
+        processed_original += metadata.original_bytes
+        processed_optimized += metadata.optimized_bytes
+
+    # ── Apply batch sequential naming ──────────────────────────────────────────
+    if len(processed) > 1:
+        for seq, p in enumerate(processed, start=1):
+            p.relative_path = resolve_batch_output_name(
+                p.relative_path, naming_config, "glb", seq
+            )
+            p.filename = resolve_batch_output_name(
+                p.filename, naming_config, "glb", seq
+            )
+
+    # ── Build response ────────────────────────────────────────────────────────
+    if len(processed) == 1:
+        return _build_glb_single_response(processed[0])
+    else:
+        # Collect all errors (validation + transform)
+        all_errors = batch_errors + transform_errors
+
+        archived = [ArchivedFile(relative_path=p.relative_path, data=p.data) for p in processed]
+
+        # First resolve final ZIP paths (including collision handling), then build manifest,
+        # then write the ZIP with manifest.json included.
+        _, resolved = zip_transformed_assets(archived)
+
+        manifest_data = _build_glb_manifest_payload(
             processed,
             [r.resolved_path for r in resolved],
             all_errors,
