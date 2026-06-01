@@ -86,18 +86,64 @@ This means the positive path is confirmed for the current container baseline, no
 curl http://localhost:8000/health
 ```
 
-Returns dependency and AVIF status:
+Returns dependency, AVIF, and GLB status:
 ```json
 {
   "status": "online",
   "service": "asset-optimizer-api",
   "avif_available": true,
+  "gltf_transform_available": true,
   "dependencies": {
-    "pillow": { "version": "11.x.x", "status": "ok" },
-    "avif_encoder": { "available": true, "status": "ok" }
+    "pillow": { "version": "12.x.x", "status": "ok" },
+    "avif_encoder": { "available": true, "status": "ok" },
+    "gltf_transform": { "available": true, "status": "ok" }
   }
 }
 ```
+
+## GLB Support — Troubleshooting
+
+GLB optimization requires the `gltf-transform` CLI installed via Node.js. The Dockerfile installs Node.js 22.x and `@gltf-transform/cli` globally.
+
+### Symptoms
+
+- `/health` returns `gltf_transform_available: false`
+- Frontend shows "GLB optimizer not available" error
+- Startup logs: `Startup: AVIF=..., gltf-transform=False, Pillow=...`
+
+### Fix — Local (Python)
+
+GLB optimization requires Node.js and the gltf-transform CLI:
+
+```bash
+# Install Node.js 22+ first, then:
+npm install -g @gltf-transform/cli
+# Restart the API server
+```
+
+### Fix — Docker
+
+The Dockerfile installs Node.js and gltf-transform. If GLB is still unavailable, rebuild:
+
+```bash
+docker compose build --no-cache api
+docker compose up api
+```
+
+### Verify Fix
+
+```bash
+curl http://localhost:8000/health | grep gltf_transform_available
+```
+
+Should return `"gltf_transform_available": true`.
+
+### Frontend Fallback Behavior
+
+The frontend detects GLB runtime availability via `/health`.
+
+- If `gltf_transform_available` is `false`, the UI shows a clear error when attempting GLB optimization.
+- The upload flow still accepts `.glb` files, but the optimize button triggers the error state.
 
 ## AVIF Support — Troubleshooting
 

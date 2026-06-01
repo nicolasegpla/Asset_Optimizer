@@ -10,11 +10,12 @@ interface SourcePanelProps {
   selectedFiles: SelectedFile[];
   selectionSummary: SelectionSummary | null;
   onSelection: (files: FileList | File[] | null, source: 'files' | 'folder') => void;
-  limits: { max_files: number; max_total_bytes: number };
+  limits: { max_files: number; max_total_bytes: number; max_glb_total_bytes: number };
   currentTotalBytes: number;
+  isGlbMode: boolean;
 }
 
-const INPUT_ACCEPT = '.jpg,.jpeg,.png,.webp';
+const INPUT_ACCEPT = '.jpg,.jpeg,.png,.webp,.glb';
 type PickerFile = File & { webkitRelativePath?: string };
 type DirectoryHandleWithValues = FileSystemDirectoryHandle & {
   values: () => AsyncIterable<FileSystemHandle>;
@@ -64,6 +65,7 @@ export function SourcePanel({
   onSelection,
   limits,
   currentTotalBytes,
+  isGlbMode,
 }: SourcePanelProps) {
   const [isFolderModalOpen, setIsFolderModalOpen] = useState(false);
 
@@ -71,10 +73,16 @@ export function SourcePanel({
     selectedFiles.reduce((acc, f) => acc + f.sizeInBytes, 0) || null,
   );
 
-  const isOverFileLimit = selectedFiles.length > limits.max_files;
-  const isOverSizeLimit = currentTotalBytes > limits.max_total_bytes;
+  // Use GLB-specific limits when in GLB mode
+  const effectiveMaxTotalBytes = isGlbMode ? limits.max_glb_total_bytes : limits.max_total_bytes;
 
-  const cautionWarnings = computeBatchWarnings(selectedFiles.length, currentTotalBytes, limits);
+  const isOverFileLimit = selectedFiles.length > limits.max_files;
+  const isOverSizeLimit = currentTotalBytes > effectiveMaxTotalBytes;
+
+  const cautionWarnings = computeBatchWarnings(selectedFiles.length, currentTotalBytes, {
+    ...limits,
+    max_total_bytes: effectiveMaxTotalBytes,
+  });
 
   const handleFolderConfirm = async () => {
     setIsFolderModalOpen(false);
@@ -122,7 +130,7 @@ export function SourcePanel({
           aria-hidden="true"
           onChange={(event) => onSelection(event.target.files, 'files')}
         />
-        <small className="format-hint">Supported input formats: JPG, JPEG, PNG, WEBP.</small>
+        <small className="format-hint">Supported input formats: JPG, JPEG, PNG, WEBP, GLB.</small>
       </label>
 
       <label className="picker">
@@ -147,7 +155,7 @@ export function SourcePanel({
           onChange={(event) => onSelection(event.target.files, 'folder')}
         />
         <small className="format-hint">
-          Folder uploads can include only JPG, JPEG, PNG, and WEBP files.
+          Folder uploads can include only JPG, JPEG, PNG, WEBP, and GLB files.
         </small>
       </label>
 
@@ -164,8 +172,8 @@ export function SourcePanel({
             <p className="app-modal-eyebrow">Folder upload</p>
             <h3 id="folder-modal-title">Choose a folder for batch processing</h3>
             <p id="folder-modal-description" className="app-modal-description">
-              We’ll open your browser’s native folder picker next. Select only folders you trust and
-              that contain JPG, JPEG, PNG, or WEBP files.
+              We’ll open your browser’s native folder picker next.               Select only folders you trust and
+              that contain JPG, JPEG, PNG, WEBP, or GLB files.
             </p>
             <div className="app-modal-actions">
               <button type="button" className="modal-secondary-button" onClick={() => setIsFolderModalOpen(false)}>
@@ -190,7 +198,7 @@ export function SourcePanel({
           <span>
             Limits exceeded: {isOverFileLimit && `${selectedFiles.length}/${limits.max_files} files`}
             {isOverFileLimit && isOverSizeLimit && ' · '}
-            {isOverSizeLimit && `${totalSizeLabel}/${formatBytesMB(limits.max_total_bytes)} total`}
+            {isOverSizeLimit && `${totalSizeLabel}/${formatBytesMB(effectiveMaxTotalBytes)} total`}
           </span>
         </div>
       )}

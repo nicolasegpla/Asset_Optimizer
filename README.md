@@ -5,7 +5,7 @@
 <h1 align="center">Asset Optimizer</h1>
 
 <p align="center">
-  <strong>Convert, compress, resize, and package web-ready image assets.</strong>
+  <strong>Convert, compress, resize, and package web-ready image and 3D assets.</strong>
 </p>
 
 <p align="center">
@@ -13,7 +13,7 @@
 </p>
 
 <p align="center">
-  <img alt="Version" src="https://img.shields.io/badge/version-1.0.0-2f855a?style=flat-square" />
+  <img alt="Version" src="https://img.shields.io/badge/version-1.1.0-2f855a?style=flat-square" />
   <img alt="Frontend" src="https://img.shields.io/badge/frontend-React%20%2B%20TypeScript-2563eb?style=flat-square" />
   <img alt="Backend" src="https://img.shields.io/badge/backend-FastAPI-059669?style=flat-square" />
   <img alt="Deploy" src="https://img.shields.io/badge/deploy-Railway-7c3aed?style=flat-square" />
@@ -23,7 +23,7 @@
 
 ## ✨ Why this project exists
 
-Asset Optimizer is focused on one job: preparing images so they are actually ready to publish.
+Asset Optimizer is focused on one job: preparing images and 3D models so they are actually ready to publish.
 
 It is not just a generic format converter. The product goal is to help users convert, compress, resize, and package assets so they ship with better performance, better compatibility, and lower file size.
 
@@ -32,14 +32,14 @@ It is not just a generic format converter. The product goal is to help users con
 - People building websites
 - E-commerce teams managing product images
 - Creators preparing assets for digital products
-- Developers and designers optimizing images for the web
+- Developers and designers optimizing images and 3D models for the web
 
 ## 🚀 Current baseline
 
 | Topic | Status |
 |------|--------|
-| Stable version | **1.0.0** |
-| Product contract | Frozen in [`docs/version-1-0-0.md`](./docs/version-1-0-0.md) |
+| Stable version | **1.1.0** |
+| Product contract | [`docs/version-1-1-0.md`](./docs/version-1-1-0.md) |
 | Release lane | [`docs/release-process.md`](./docs/release-process.md) |
 | Runtime / env reference | [`docs/environment.md`](./docs/environment.md) |
 | Setup / operations | [`docs/setup.md`](./docs/setup.md) |
@@ -69,11 +69,13 @@ If you want to understand the environment variables and what they do, see [Envir
 
 ### Core flows
 
-- Upload one file and get a direct optimized download
+- Upload one image and get a direct optimized download
+- Upload one GLB and get a Draco-compressed optimized download
 - Upload multiple files or a folder and get a ZIP package
 - Keep batch metadata with `manifest.json`
 - Use AVIF only when the runtime actually supports it
 - Preserve folder paths when the browser provides them
+- Prevent mixing images and GLB files in the same batch
 
 ### Supported formats
 
@@ -82,6 +84,7 @@ If you want to understand the environment variables and what they do, see [Envir
 | JPG / JPEG | JPG / JPEG |
 | PNG | PNG |
 | WEBP | WEBP |
+| GLB | GLB (optimized) |
 | — | AVIF |
 
 ### Key product rules
@@ -109,12 +112,14 @@ asset-optimizer/
 | Layer | Tools |
 |------|-------|
 | Frontend | React 19, TypeScript, Vite |
-| Backend | Python, FastAPI, Pillow, pillow-avif-plugin |
+| Backend | Python, FastAPI, Pillow, pillow-avif-plugin, Node.js, gltf-transform |
 | Testing | Vitest, React Testing Library, pytest, Playwright smoke |
 | Local infra | Docker Compose, Bun |
 | Deploy | Railway |
 
 ## ✅ Core features
+
+### Images
 
 - Upload one or multiple image files
 - Select a full folder from the browser
@@ -127,6 +132,15 @@ asset-optimizer/
 - Single-image before/after comparison
 - Batch manifest metadata inside ZIPs
 - Partial success in batch processing
+
+### 3D Models (GLB)
+
+- Upload one or multiple `.glb` files
+- Apply Draco compression for geometry
+- Automatic deduplication, pruning, and quantization
+- See file size reduction
+- Download optimized GLB directly or as ZIP batch
+- Batch manifest metadata inside ZIPs
 
 ## 📦 Batch processing rules
 
@@ -153,7 +167,7 @@ Key references:
 
 ## 🔌 API overview
 
-### `POST /api/v1/transform`
+### `POST /api/v1/transform` (Images)
 
 `multipart/form-data`
 
@@ -166,6 +180,19 @@ Fields:
 - `max_height` → optional
 - `paths` → optional ordered JSON array for folder structure preservation
 
+### `POST /api/v1/optimize-glb` (3D Models)
+
+`multipart/form-data`
+
+Fields:
+
+- `files` → one or more `.glb` files
+- `zip_name` → optional
+- `output_stem` → optional (batch only)
+- `paths` → optional ordered JSON array for folder structure preservation
+
+Applies Draco compression, deduplication, pruning, and quantization.
+
 ### `GET /api/v1/formats`
 
 Returns supported input and output formats.
@@ -176,15 +203,24 @@ Returns backend-enforced limits for frontend display.
 
 ### `GET /health`
 
-Returns API health status.
+Returns API health status including GLB runtime availability.
 
 ## 📏 Processing limits
+
+### Images
 
 - Max 100 files per request
 - Max 50 MB total upload size
 - Max 50 megapixels per image
 - Max 120 seconds cumulative processing time per request
 - `max_width` / `max_height`: `1..10000`
+
+### GLB (3D Models)
+
+- Max 100 files per request
+- Max 500 MB total upload size
+- Max 100 MB per individual GLB file
+- Max 120 seconds cumulative processing time per request
 
 ## 🖥️ Frontend UX notes
 
