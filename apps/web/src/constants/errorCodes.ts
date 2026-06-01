@@ -16,6 +16,22 @@ export const ERROR_COPY = {
     hint: 'Try a smaller batch with fewer than 100 files.',
     title: 'Too many files selected',
   },
+  GLB_OPTIMIZATION_FAILED: {
+    hint: 'Make sure the file is a valid GLB and try again.',
+    title: 'GLB optimization failed',
+  },
+  GLB_RUNTIME_UNAVAILABLE: {
+    hint: 'The GLB optimization runtime is not installed on the server.',
+    title: 'GLB optimizer not available',
+  },
+  GLB_TOO_LARGE: {
+    hint: 'Try a smaller GLB file or reduce mesh complexity before uploading.',
+    title: 'The GLB file is too large',
+  },
+  INVALID_GLB: {
+    hint: 'Make sure the selected files are valid GLB files and not corrupted.',
+    title: 'We could not process one or more GLB files',
+  },
   IMAGE_TOO_LARGE: {
     hint: 'Try a smaller image or reduce dimensions before uploading.',
     title: 'The image is too large to process',
@@ -35,6 +51,10 @@ export const ERROR_COPY = {
   INVALID_QUALITY: {
     hint: 'Choose a quality value between 1 and 100.',
     title: 'The quality value is not valid',
+  },
+  MIXED_FILE_TYPES: {
+    hint: 'Upload only image files or only GLB files, not both at the same time.',
+    title: 'Mixed file types are not supported',
   },
   NETWORK_ERROR: {
     hint: 'Check that the API is running and try again.',
