@@ -23,6 +23,7 @@ interface SettingsPanelProps {
   showOutputStem: boolean;
   isProcessing: boolean;
   avifAvailable: boolean;
+  isGlbMode?: boolean;
   onOutputFormatChange: (format: OutputFormat) => void;
   onQualityChange: (quality: number) => void;
   onMaxWidthChange: (width: string) => void;
@@ -48,6 +49,7 @@ export function SettingsPanel({
   showOutputStem,
   isProcessing,
   avifAvailable,
+  isGlbMode,
   onOutputFormatChange,
   onQualityChange,
   onMaxWidthChange,
@@ -74,89 +76,98 @@ export function SettingsPanel({
     <div className="column">
       <h2>Transformation settings</h2>
 
-      <label>
-        <span>Preset</span>
-        <select
-          value={activePreset}
-          onChange={(event) => handlePresetChange(event.target.value as PresetId)}
-        >
-          <option value={PRESET_IDS.CUSTOM}>Custom</option>
-          {PRESET_CATALOG.map((preset) => (
-            <option key={preset.id} value={preset.id}>
-              {preset.label}
-            </option>
-          ))}
-        </select>
-      </label>
+      {isGlbMode ? (
+        <div className="glb-mode-badge">
+          <span>GLB Optimization</span>
+          <small>Weight reduction via deduplication, pruning, quantization, and Draco compression.</small>
+        </div>
+      ) : (
+        <>
+          <label>
+            <span>Preset</span>
+            <select
+              value={activePreset}
+              onChange={(event) => handlePresetChange(event.target.value as PresetId)}
+            >
+              <option value={PRESET_IDS.CUSTOM}>Custom</option>
+              {PRESET_CATALOG.map((preset) => (
+                <option key={preset.id} value={preset.id}>
+                  {preset.label}
+                </option>
+              ))}
+            </select>
+          </label>
 
-      {activePreset !== PRESET_IDS.CUSTOM && (() => {
-        const matched = PRESET_CATALOG.find((p) => p.id === activePreset);
-        return matched?.rationale ? (
-          <small className="preset-rationale-hint">{matched.rationale}</small>
-        ) : null;
-      })()}
+          {activePreset !== PRESET_IDS.CUSTOM && (() => {
+            const matched = PRESET_CATALOG.find((p) => p.id === activePreset);
+            return matched?.rationale ? (
+              <small className="preset-rationale-hint">{matched.rationale}</small>
+            ) : null;
+          })()}
 
-      <label>
-        <span>Output format</span>
-        <select
-          value={outputFormat}
-          onChange={(event) => {
-            onOutputFormatChange(event.target.value as OutputFormat);
-          }}
-        >
-          <option value="jpg">JPG</option>
-          <option value="png">PNG</option>
-          <option value="webp">WEBP</option>
-          {avifAvailable ? (
-            <option value="avif">AVIF</option>
-          ) : (
-            <option value="avif" disabled title="AVIF requires a server dependency — currently not installed">
-              AVIF (unavailable)
-            </option>
-          )}
-        </select>
-        <FormatGuide outputFormat={outputFormat} />
-      </label>
+          <label>
+            <span>Output format</span>
+            <select
+              value={outputFormat}
+              onChange={(event) => {
+                onOutputFormatChange(event.target.value as OutputFormat);
+              }}
+            >
+              <option value="jpg">JPG</option>
+              <option value="png">PNG</option>
+              <option value="webp">WEBP</option>
+              {avifAvailable ? (
+                <option value="avif">AVIF</option>
+              ) : (
+                <option value="avif" disabled title="AVIF requires a server dependency — currently not installed">
+                  AVIF (unavailable)
+                </option>
+              )}
+            </select>
+            <FormatGuide outputFormat={outputFormat} />
+          </label>
 
-      <label>
-        <span>Quality</span>
-        <input
-          max={100}
-          min={1}
-          type="range"
-          value={quality}
-          onChange={(event) => onQualityChange(Number(event.target.value))}
-        />
-        <small>{quality}%</small>
-      </label>
+          <label>
+            <span>Quality</span>
+            <input
+              max={100}
+              min={1}
+              type="range"
+              value={quality}
+              onChange={(event) => onQualityChange(Number(event.target.value))}
+            />
+            <small>{quality}%</small>
+          </label>
 
-      <div className="dimension-grid">
-        <label>
-          <span>Max width</span>
-          <input
-            inputMode="numeric"
-            maxLength={MAX_DIMENSION_DIGITS}
-            pattern="[0-9]*"
-            placeholder="1200"
-            type="text"
-            value={maxWidth}
-            onChange={(event) => onMaxWidthChange(sanitizeDimensionInput(event.target.value))}
-          />
-        </label>
+          <div className="dimension-grid">
+            <label>
+              <span>Max width</span>
+              <input
+                inputMode="numeric"
+                maxLength={MAX_DIMENSION_DIGITS}
+                pattern="[0-9]*"
+                placeholder="1200"
+                type="text"
+                value={maxWidth}
+                onChange={(event) => onMaxWidthChange(sanitizeDimensionInput(event.target.value))}
+              />
+            </label>
 
-        <label>
-          <span>Max height</span>
-          <input
-            inputMode="numeric"
-            maxLength={MAX_DIMENSION_DIGITS}
-            pattern="[0-9]*"
-            placeholder="1200"
-            type="text"
-            value={maxHeight}
-            onChange={(event) => onMaxHeightChange(sanitizeDimensionInput(event.target.value))}
-          />
-        </label>
-      </div>
+            <label>
+              <span>Max height</span>
+              <input
+                inputMode="numeric"
+                maxLength={MAX_DIMENSION_DIGITS}
+                pattern="[0-9]*"
+                placeholder="1200"
+                type="text"
+                value={maxHeight}
+                onChange={(event) => onMaxHeightChange(sanitizeDimensionInput(event.target.value))}
+              />
+            </label>
+          </div>
+        </>
+      )}
 
       <div className="naming-grid">
         {showZipName && (

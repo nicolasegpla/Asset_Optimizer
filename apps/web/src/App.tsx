@@ -9,6 +9,7 @@ import { FileList } from './components/FileList';
 import { OUTPUT_FORMAT, type OutputFormat } from './constants/outputFormat';
 import { useBackendStatus } from './hooks/useBackendStatus';
 import { useImageProcessing } from './hooks/useImageProcessing';
+import { useGlbProcessing } from './hooks/useGlbProcessing';
 import { filterSystemFiles } from './utils/fileFilters';
 
 // ─── Constants ───────────────────────────────────────────────────────────────────
@@ -18,6 +19,7 @@ const SUPPORTED_INPUT_FORMAT = {
     JPEG: 'jpeg',
     PNG: 'png',
     WEBP: 'webp',
+    GLB: 'glb',
 } as const;
 
 type SupportedInputFormat = (typeof SUPPORTED_INPUT_FORMAT)[keyof typeof SUPPORTED_INPUT_FORMAT];
@@ -92,20 +94,40 @@ function isSupportedInputFile(file: File): boolean {
     return SUPPORTED_INPUT_FORMAT_VALUES.includes(getFileExtension(file.name) as SupportedInputFormat);
 }
 
+function isGlbFile(file: File): boolean {
+    return getFileExtension(file.name) === SUPPORTED_INPUT_FORMAT.GLB;
+}
+
+function hasMixedFileTypes(files: File[]): boolean {
+    const hasGlb = files.some(isGlbFile);
+    const hasNonGlb = files.some((f) => !isGlbFile(f));
+    return hasGlb && hasNonGlb;
+}
+
 export function App() {
     const filesInputRef = useRef<HTMLInputElement | null>(null);
     const folderInputRef = useRef<HTMLInputElement | null>(null);
 
     const { apiStatus, limits, avifAvailable } = useBackendStatus();
+    const imageProcessing = useImageProcessing();
+    const glbProcessing = useGlbProcessing();
+
     const {
-        isProcessing,
-        result,
+        isProcessing: isImageProcessing,
+        result: imageResult,
         imageComparisonPreview,
         comparisonPosition,
         setComparisonPosition,
-        handleOptimize,
-        clearResult,
-    } = useImageProcessing();
+        handleOptimize: handleImageOptimize,
+        clearResult: clearImageResult,
+    } = imageProcessing;
+
+    const {
+        isProcessing: isGlbProcessing,
+        result: glbResult,
+        handleOptimize: handleGlbOptimize,
+        clearResult: clearGlbResult,
+    } = glbProcessing;
 
     const [outputFormat, setOutputFormat] = useState<OutputFormat>(OUTPUT_FORMAT.WEBP);
     const [quality, setQuality] = useState(80);
@@ -119,6 +141,12 @@ export function App() {
     const [selectedUploadFiles, setSelectedUploadFiles] = useState<File[]>([]);
     const [selectionSummary, setSelectionSummary] = useState<SelectionSummary | null>(null);
     const [selectionSource, setSelectionSource] = useState<SelectionSource>(null);
+
+    const isGlbMode = selectedUploadFiles.length > 0 && selectedUploadFiles.every(isGlbFile);
+    const [lastProcessMode, setLastProcessMode] = useState<'image' | 'glb' | null>(null);
+    
+    const isProcessing = isGlbMode ? isGlbProcessing : isImageProcessing;
+    const result = lastProcessMode === 'glb' ? glbResult : lastProcessMode === 'image' ? imageResult : (isGlbMode ? glbResult : imageResult);
 
     useEffect(() => {
         return () => {
@@ -149,7 +177,9 @@ export function App() {
 
     const clearSelection = () => {
         resetSelectionState();
-        clearResult();
+        clearImageResult();
+        clearGlbResult();
+        setLastProcessMode(null);
         resetFileInputs();
     };
 
@@ -171,6 +201,19 @@ export function App() {
         const validFiles = uploadFiles.filter(isSupportedInputFile);
         const invalidFiles = uploadFiles.filter((file) => !isSupportedInputFile(file));
 
+        // Reject mixed file types (images + GLB)
+        if (validFiles.length > 0 && hasMixedFileTypes(validFiles)) {
+            clearSelection();
+            setSelectionSummary({
+                invalidFileNames: ['Mixed file types are not supported. Upload only images or only GLB files.'],
+                skippedCount: validFiles.length,
+                validCount: 0,
+            });
+            clearImageResult();
+            clearGlbResult();
+            return;
+        }
+
         // Build list of all rejected files for user feedback
         const allRejectedNames = [
             ...filterResult.filteredNames,
@@ -184,7 +227,8 @@ export function App() {
                 skippedCount: junkCount + invalidFiles.length,
                 validCount: 0,
             });
-            clearResult();
+            clearImageResult();
+            clearGlbResult();
             return;
         }
 
@@ -223,6 +267,7 @@ export function App() {
                     onSelection={handleSelection}
                     limits={limits}
                     currentTotalBytes={currentTotalBytes}
+                    isGlbMode={isGlbMode}
                 />
 
                 <SettingsPanel
@@ -239,6 +284,7 @@ export function App() {
                     showOutputStem={selectedUploadFiles.length > 1 || selectionSource === 'folder'}
                     isProcessing={isProcessing}
                     avifAvailable={avifAvailable}
+                    isGlbMode={isGlbMode}
                     onOutputFormatChange={setOutputFormat}
                     onQualityChange={setQuality}
                     onMaxWidthChange={setMaxWidth}
@@ -248,22 +294,40 @@ export function App() {
                     onOutputSuffixChange={setOutputSuffix}
                     onOutputStemChange={setOutputStem}
                     onOptimize={async () => {
-                        const wasSuccessful = await handleOptimize({
-                            files: selectedUploadFiles,
-                            outputFormat,
-                            quality,
-                            maxWidth,
-                            maxHeight,
-                            zipName: zipName || undefined,
-                            outputPrefix: outputPrefix || undefined,
-                            outputSuffix: outputSuffix || undefined,
-                            outputStem: outputStem || undefined,
-                            selectionSummary: selectionSummary ?? undefined,
-                        });
+                        if (isGlbMode) {
+                            setLastProcessMode('glb');
+                            const wasSuccessful = await handleGlbOptimize({
+                                files: selectedUploadFiles,
+                                zipName: zipName || undefined,
+                                outputPrefix: outputPrefix || undefined,
+                                outputSuffix: outputSuffix || undefined,
+                                outputStem: outputStem || undefined,
+                                selectionSummary: selectionSummary ?? undefined,
+                            });
 
-                        if (wasSuccessful) {
-                            resetSelectionState();
-                            resetFileInputs();
+                            if (wasSuccessful) {
+                                resetSelectionState();
+                                resetFileInputs();
+                            }
+                        } else {
+                            setLastProcessMode('image');
+                            const wasSuccessful = await handleImageOptimize({
+                                files: selectedUploadFiles,
+                                outputFormat,
+                                quality,
+                                maxWidth,
+                                maxHeight,
+                                zipName: zipName || undefined,
+                                outputPrefix: outputPrefix || undefined,
+                                outputSuffix: outputSuffix || undefined,
+                                outputStem: outputStem || undefined,
+                                selectionSummary: selectionSummary ?? undefined,
+                            });
+
+                            if (wasSuccessful) {
+                                resetSelectionState();
+                                resetFileInputs();
+                            }
                         }
                     }}
                 />
